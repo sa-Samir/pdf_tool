@@ -1,0 +1,29 @@
+PODS:
+  - file_picker_darwin (1.0.0):
+    - Flutter
+    - FlutterMacOS
+  - Flutter (1.0.0)
+  - share_plus (0.0.1):
+    - Flutter
+
+DEPENDENCIES:
+  - file_picker_darwin (from `.symlinks/plugins/file_picker_darwin/darwin`)
+  - Flutter (from `Flutter`)
+  - share_plus (from `.symlinks/plugins/share_plus/ios`)
+
+EXTERNAL SOURCES:
+  file_picker_darwin:
+    :path: ".symlinks/plugins/file_picker_darwin/darwin"
+  Flutter:
+    :path: Flutter
+  share_plus:
+    :path: ".symlinks/plugins/share_plus/ios"
+
+SPEC CHECKSUMS:
+  file_picker_darwin: 4c2b9a50ea44cb3b071381ea0cf48591bdd80251
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
+
+PODFILE CHECKSUM: 3c63482e143d1b91d2d2560aee9fb04ecc74ac7e
+
+COCOAPODS: 1.16.2

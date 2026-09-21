@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pre-API-31 launch window. API 31+ uses the platform splash screen API
+     configured in values-v31/styles.xml. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/launch_background" />
+    <item
+        android:drawable="@drawable/ic_launch_logo"
+        android:gravity="center" />
+</layer-list>

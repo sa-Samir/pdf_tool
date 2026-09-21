@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from the unit geometry in docs/. Keep in sync with the iOS LaunchImage. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path android:fillColor="#FF4F46E5" android:pathData="M25,6 L56,6 L82,32 L82,87 A7,7 0 0 1 75,94 L25,94 A7,7 0 0 1 18,87 L18,13 A7,7 0 0 1 25,6 Z" />
+    <path android:fillColor="#FF8B85F0" android:pathData="M56,6 L82,32 L56,32 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M33.75,46.25 L66.25,46.25 A3.75,3.75 0 0 1 66.25,53.75 L33.75,53.75 A3.75,3.75 0 0 1 33.75,46.25 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M33.75,59.25 L66.25,59.25 A3.75,3.75 0 0 1 66.25,66.75 L33.75,66.75 A3.75,3.75 0 0 1 33.75,59.25 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M33.75,72.25 L52.25,72.25 A3.75,3.75 0 0 1 52.25,79.75 L33.75,79.75 A3.75,3.75 0 0 1 33.75,72.25 Z" />
+</vector>

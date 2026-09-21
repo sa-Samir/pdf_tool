@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launch background: matches the app's light surface so the handoff from the
+         platform splash to the first Flutter frame is seamless (requirements 3.0). -->
+    <color name="launch_background">#FFFFFFFF</color>
+</resources>
