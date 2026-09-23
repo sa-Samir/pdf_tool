@@ -6,6 +6,7 @@ import 'package:pdf_toolbox/core/engine/compression.dart';
 import 'package:pdf_toolbox/core/engine/pdf_engine.dart';
 import 'package:pdf_toolbox/core/engine/pdf_failure.dart';
 import 'package:pdf_toolbox/core/files/file_importer.dart';
+import 'package:pdf_toolbox/core/images/image_normalizer.dart';
 import 'package:pdf_toolbox/core/jobs/cancel_token.dart';
 import 'package:pdf_toolbox/core/library/library_document.dart';
 import 'package:pdf_toolbox/core/library/library_repository.dart';
@@ -186,6 +187,61 @@ class FakePdfEngine implements PdfEngine {
   }
 
   @override
+  Future<List<PageGeometry>> pageGeometry(
+    File input, {
+    CancelToken? cancel,
+    String? password,
+  }) async {
+    final info = await inspect(input);
+    return [
+      // A4, so DPI arithmetic in tests matches the real thing.
+      for (var i = 0; i < info.pageCount; i++)
+        const PageGeometry(width: 595.28, height: 841.89),
+    ];
+  }
+
+  @override
+  Future<void> imagesToPdf({
+    required List<PlacedImage> images,
+    required File output,
+    void Function(int completed, int total)? onStep,
+    CancelToken? cancel,
+  }) async {
+    calls.add('imagesToPdf:${images.length}');
+    cancel?.throwIfCancelled();
+    await _waitGate(cancel);
+    if (failWith case final failure?) throw failure;
+    cancel?.throwIfCancelled();
+    onStep?.call(images.length, images.length + 1);
+    await writeFake(output, images.length);
+    onStep?.call(images.length + 1, images.length + 1);
+  }
+
+  @override
+  Future<Uint8List> renderPageAt({
+    required File input,
+    required int pageIndex,
+    required int pixelWidth,
+    required int pixelHeight,
+    CancelToken? cancel,
+    String? password,
+  }) async {
+    calls.add('renderPageAt:$pageIndex@${pixelWidth}x$pixelHeight');
+    cancel?.throwIfCancelled();
+    await _waitGate(cancel);
+    if (failWith case final failure?) throw failure;
+    final pages = (await inspect(input)).pageCount;
+    if (pageIndex < 0 || pageIndex >= pages) {
+      throw const PdfFailure(FailureKind.pageOutOfRange);
+    }
+    // Size scales with the requested pixels, so estimates behave sensibly.
+    return Uint8List.fromList([
+      ...kTinyPng,
+      ...List.filled(pixelWidth * pixelHeight ~/ 800, 0),
+    ]);
+  }
+
+  @override
   Future<void> dispose() async => disposed = true;
 
   Future<void> _waitGate(CancelToken? cancel) async {
@@ -210,6 +266,45 @@ class FakeFileImporter implements FileImporter {
     if (failWith case final failure?) throw failure;
     if (queued.isEmpty) return const [];
     return queued.removeAt(0);
+  }
+
+  @override
+  Future<List<ImportedDocument>> pickImages() => pickPdfs();
+}
+
+/// Normalizer for tests: copies the bytes and reports fixed dimensions, so no
+/// platform channel is involved.
+class FakeImageNormalizer implements ImageNormalizer {
+  FakeImageNormalizer({this.width = 1200, this.height = 1600});
+
+  int width;
+  int height;
+  final calls = <String>[];
+
+  @override
+  Future<NormalizedImage> normalize(
+    File source, {
+    required File target,
+    required ImageQuality quality,
+    int quarterTurns = 0,
+  }) async {
+    calls.add('normalize:${source.path}:q${quality.jpegQuality}:r$quarterTurns');
+    await target.parent.create(recursive: true);
+    await target.writeAsBytes(kTinyPng);
+    // A quarter turn swaps the reported dimensions, as a real rotation would.
+    final turned = quarterTurns.isOdd;
+    return NormalizedImage(
+      file: target,
+      width: turned ? height : width,
+      height: turned ? width : height,
+    );
+  }
+
+  @override
+  Future<Uint8List> toJpeg(Uint8List png, {int quality = 85}) async {
+    calls.add('toJpeg:q$quality');
+    // JPEG is smaller than PNG here, as it would be in practice.
+    return Uint8List.fromList(png.sublist(0, (png.length * 0.4).round()));
   }
 }
 
@@ -319,6 +414,39 @@ class MemoryFakeEngine implements PdfEngine {
     String? password,
   }) async =>
       throw UnimplementedError('widget tests do not run operations');
+
+  @override
+  Future<List<PageGeometry>> pageGeometry(
+    File input, {
+    CancelToken? cancel,
+    String? password,
+  }) async =>
+      [
+        for (var i = 0; i < (pages[input.path] ?? 0); i++)
+          const PageGeometry(width: 595.28, height: 841.89),
+      ];
+
+  @override
+  Future<void> imagesToPdf({
+    required List<PlacedImage> images,
+    required File output,
+    void Function(int completed, int total)? onStep,
+    CancelToken? cancel,
+  }) async =>
+      throw UnimplementedError('widget tests do not run operations');
+
+  @override
+  Future<Uint8List> renderPageAt({
+    required File input,
+    required int pageIndex,
+    required int pixelWidth,
+    required int pixelHeight,
+    CancelToken? cancel,
+    String? password,
+  }) async {
+    renderCount++;
+    return Uint8List.fromList([...kTinyPng, ...List.filled(2000, 0)]);
+  }
 
   @override
   Future<void> dispose() async {}

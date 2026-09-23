@@ -25,10 +25,17 @@ class ImportedDocument {
   final int sizeBytes;
 }
 
+/// Image formats accepted on import (requirements.md 3.3).
+const kImageExtensions = ['jpg', 'jpeg', 'png', 'heic', 'heif', 'webp'];
+
 /// Brings files into the app.
 abstract interface class FileImporter {
   /// Returns an empty list if the user cancels, which is not an error.
   Future<List<ImportedDocument>> pickPdfs({bool multiple = true});
+
+  /// Picks images. HEIC is accepted here and transcoded later, since Dart
+  /// cannot decode it (requirements.md 3.3).
+  Future<List<ImportedDocument>> pickImages();
 }
 
 /// The real one: the system document picker (requirements.md 3.3).
@@ -41,19 +48,33 @@ class SystemFileImporter implements FileImporter {
   final DocumentStore _store;
 
   @override
-  Future<List<ImportedDocument>> pickPdfs({bool multiple = true}) async {
+  Future<List<ImportedDocument>> pickImages() => _pick(
+        extensions: kImageExtensions,
+        title: 'Choose images',
+        multiple: true,
+      );
+
+  @override
+  Future<List<ImportedDocument>> pickPdfs({bool multiple = true}) =>
+      _pick(extensions: const ['pdf'], title: 'Choose PDFs', multiple: multiple);
+
+  Future<List<ImportedDocument>> _pick({
+    required List<String> extensions,
+    required String title,
+    required bool multiple,
+  }) async {
     final List<PlatformFile> picked;
     if (multiple) {
       picked = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: const ['pdf'],
-        dialogTitle: 'Choose PDFs',
+        allowedExtensions: extensions,
+        dialogTitle: title,
       );
     } else {
       final one = await FilePicker.pickFile(
         type: FileType.custom,
-        allowedExtensions: const ['pdf'],
-        dialogTitle: 'Choose a PDF',
+        allowedExtensions: extensions,
+        dialogTitle: title,
       );
       picked = one == null ? const [] : [one];
     }

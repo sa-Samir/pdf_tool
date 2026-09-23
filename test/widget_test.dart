@@ -6,6 +6,8 @@ import 'package:pdf_toolbox/core/files/document_store.dart';
 import 'package:pdf_toolbox/core/library/library_document.dart';
 import 'package:pdf_toolbox/core/services/app_services.dart';
 import 'package:pdf_toolbox/features/compress/compress_page.dart';
+import 'package:pdf_toolbox/features/images_to_pdf/images_to_pdf_page.dart';
+import 'package:pdf_toolbox/features/pdf_to_images/pdf_to_images_page.dart';
 import 'package:pdf_toolbox/features/merge/merge_page.dart';
 import 'package:pdf_toolbox/features/pages/page_grid_page.dart';
 import 'package:pdf_toolbox/core/catalog/tool_catalog.dart';
@@ -196,23 +198,26 @@ void main() {
       expect(find.byType(MergePage), findsOneWidget);
     });
 
-    testWidgets('a tool that is not built yet says so', (tester) async {
+    // Every v1.0 tool is now built, so nothing shipped reaches the
+    // placeholder. It stays for the tools that arrive in later releases.
+    for (final entry in {
+      'Compress': CompressPage,
+      'Images to PDF': ImagesToPdfPage,
+      'PDF to images': PdfToImagesPage,
+    }.entries) {
+      testWidgets('${entry.key} opens its own screen', (tester) async {
+        await _pumpHome(tester);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(entry.key));
+        await tester.pumpAndSettle();
+        expect(find.byType(entry.value), findsOneWidget);
+      });
+    }
+
+    testWidgets('no shipped tool lands on the placeholder', (tester) async {
       await _pumpHome(tester);
       await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Images to PDF'));
-      await tester.pumpAndSettle();
-      expect(find.byType(ToolPlaceholderPage), findsOneWidget);
-      expect(find.textContaining('Not built yet'), findsOneWidget);
-    });
-
-    testWidgets('Compress opens the compress screen', (tester) async {
-      await _pumpHome(tester);
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Compress'));
-      await tester.pumpAndSettle();
-      expect(find.byType(CompressPage), findsOneWidget);
+      expect(find.byType(ToolPlaceholderPage), findsNothing);
     });
 
     // One test each: a loop inside a single testWidgets would keep the pushed

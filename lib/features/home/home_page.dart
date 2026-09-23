@@ -6,8 +6,10 @@ import '../../core/models/pdf_tool.dart';
 import '../../core/services/app_services.dart';
 import '../../core/theme/app_theme.dart';
 import '../compress/compress_page.dart';
+import '../images_to_pdf/images_to_pdf_page.dart';
 import '../library/library_page.dart';
 import '../merge/merge_page.dart';
+import '../pdf_to_images/pdf_to_images_page.dart';
 import '../pages/page_grid_page.dart';
 import '../settings/settings_page.dart';
 import '../split/split_page.dart';
@@ -56,6 +58,8 @@ class _HomePageState extends State<HomePage> {
         'merge' => const MergePage(),
         'split' => const SplitPage(),
         'compress' => const CompressPage(),
+        'images_to_pdf' => const ImagesToPdfPage(),
+        'pdf_to_images' => const PdfToImagesPage(),
         // Five tools, one screen: the page grid serves them all
         // (requirements.md 3.6).
         'reorder' ||

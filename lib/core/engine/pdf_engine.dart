@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../images/page_layout.dart';
 import '../jobs/cancel_token.dart';
 import '../pages/page_edit_session.dart';
 import 'compression.dart';
@@ -93,5 +94,54 @@ abstract interface class PdfEngine {
     String? password,
   });
 
+  /// The size of each page, in PDF points. Used to turn a DPI into pixels and
+  /// to estimate export sizes (requirements.md 3.9).
+  Future<List<PageGeometry>> pageGeometry(
+    File input, {
+    CancelToken? cancel,
+    String? password,
+  });
+
+  /// Builds a PDF from already-normalised images, one page each.
+  Future<void> imagesToPdf({
+    required List<PlacedImage> images,
+    required File output,
+    void Function(int completed, int total)? onStep,
+    CancelToken? cancel,
+  });
+
+  /// Renders one page at an explicit pixel size, for export
+  /// (requirements.md 3.9).
+  Future<Uint8List> renderPageAt({
+    required File input,
+    required int pageIndex,
+    required int pixelWidth,
+    required int pixelHeight,
+    CancelToken? cancel,
+    String? password,
+  });
+
   Future<void> dispose();
+}
+
+/// One page's size, in PDF points.
+@immutable
+class PageGeometry {
+  const PageGeometry({required this.width, required this.height});
+
+  final double width;
+  final double height;
+
+  /// Pixel size at [dpi]. PDF points are 1/72 inch.
+  (int, int) pixelsAt(int dpi) =>
+      ((width / 72 * dpi).round(), (height / 72 * dpi).round());
+}
+
+/// An image with the page and rectangle it should occupy.
+@immutable
+class PlacedImage {
+  const PlacedImage({required this.file, required this.placement});
+
+  final File file;
+  final PagePlacement placement;
 }

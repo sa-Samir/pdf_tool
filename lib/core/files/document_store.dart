@@ -51,6 +51,9 @@ class DocumentStore {
   Future<Directory> outputs() async => _ensure(await _documentsRoot(), 'documents');
   Future<Directory> imports() async => _ensure(await _documentsRoot(), 'imports');
 
+  /// Where exported images land. Not the document library: those are PDFs.
+  Future<Directory> exports() async => _ensure(await _documentsRoot(), 'exports');
+
   Future<Workspace> openWorkspace() async {
     final root = _ensure(await _tempRoot(), 'workspaces');
     final id = '${DateTime.now().millisecondsSinceEpoch}'

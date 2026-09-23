@@ -318,6 +318,107 @@ class PdfManipulatorEngine implements PdfEngine {
       };
 
   @override
+  Future<List<PageGeometry>> pageGeometry(
+    File input, {
+    CancelToken? cancel,
+    String? password,
+  }) async {
+    final editor = await _guard(
+      () => _pdf.edit(FileSource(input), password: password),
+      cancel,
+    );
+    try {
+      final pages = await _guard(() => editor.pageCount, cancel);
+      final geometry = <PageGeometry>[];
+      for (var i = 0; i < pages; i++) {
+        cancel?.throwIfCancelled();
+        final box = await _guard(() => editor.pageMediaBox(i), cancel);
+        geometry.add(PageGeometry(width: box.width, height: box.height));
+      }
+      return geometry;
+    } finally {
+      await editor.dispose();
+    }
+  }
+
+  @override
+  Future<void> imagesToPdf({
+    required List<PlacedImage> images,
+    required File output,
+    void Function(int completed, int total)? onStep,
+    CancelToken? cancel,
+  }) async {
+    if (images.isEmpty) {
+      throw const PdfFailure(FailureKind.unknown, detail: 'no images');
+    }
+    final builder = await _guard(() => _pdf.build(), cancel);
+    try {
+      final total = images.length + 1;
+      for (var i = 0; i < images.length; i++) {
+        cancel?.throwIfCancelled();
+        final placed = images[i];
+        final page = await _guard(
+          () => builder.addPage(
+            width: placed.placement.pageWidth,
+            height: placed.placement.pageHeight,
+          ),
+          cancel,
+        );
+        await _guard(
+          () => page.image(
+            FileSource(placed.file),
+            px.PdfRect(
+              x: placed.placement.x,
+              y: placed.placement.y,
+              width: placed.placement.width,
+              height: placed.placement.height,
+            ),
+          ),
+          cancel,
+        );
+        onStep?.call(i + 1, total);
+      }
+      cancel?.throwIfCancelled();
+      final sink = await FileSink.create(output);
+      await _guard(() => builder.save(sink), cancel);
+      onStep?.call(total, total);
+    } finally {
+      await builder.dispose();
+    }
+  }
+
+  @override
+  Future<Uint8List> renderPageAt({
+    required File input,
+    required int pageIndex,
+    required int pixelWidth,
+    required int pixelHeight,
+    CancelToken? cancel,
+    String? password,
+  }) async {
+    final doc = await _guard(
+      () => _pdf.open(FileSource(input), password: password),
+      cancel,
+    );
+    try {
+      cancel?.throwIfCancelled();
+      final stream = doc.render(
+        pages: px.PdfPages.single(pageIndex),
+        size: px.PdfRenderSize(maxWidth: pixelWidth, maxHeight: pixelHeight),
+      );
+      try {
+        return (await stream.first).data;
+      } on px.PdfError catch (e) {
+        throw _map(e);
+      } on StateError catch (e) {
+        throw PdfFailure(FailureKind.pageOutOfRange, cause: e);
+      }
+    } finally {
+      await doc.dispose();
+    }
+  }
+
+  @override
   Future<void> dispose() => _pdf.dispose();
 
   Future<int> _sizeOf(File file) async {

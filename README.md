@@ -32,6 +32,12 @@ Phase 1 foundation and the first two tools (roadmap.md 5, 7).
   Extract. Multi-select, drag to reorder with edge auto-scroll, one undo stack
   across every kind of edit, and a single save (requirements.md 3.6).
 - Lazily rendered page thumbnails with a bounded LRU cache.
+- **Images to PDF**: reorder, rotate, page size, orientation, margin, fit and
+  quality. Images are prepared natively one at a time, so fifty photos never
+  become fifty bitmaps in memory, and EXIF orientation is baked in.
+- **PDF to images**: all pages or a range, PNG or JPG, 72/150/300 dpi, with the
+  file count, pixel size and total size measured from a real page before you
+  commit. Cancelling deletes everything it had written.
 - **Compress**, built on measured behaviour (docs/benchmarks.md): three
   presets, an honest pre-flight that never promises a percentage, real
   before/after numbers, a side-by-side page comparison, and an
@@ -40,11 +46,15 @@ Phase 1 foundation and the first two tools (roadmap.md 5, 7).
   every save. Recents on the home screen, a Files screen with search, sort and
   favourites, rename/share/delete, retention, and clear-history in Settings.
 
+Every tool in the v1.0 set is built.
+
 **Not yet**
 
-Images to PDF and PDF to Images are still placeholder screens.
-Folders are not built yet, and there is no full-page viewer (the grid covers
-page-level work; opening a file hands it to the platform).
+Folders (requirements.md 5.1) are not built, so the library is flat. There is
+no full-page viewer, so opening a file hands it to the platform. Per-image
+cropping in Images to PDF is not built; rotation is. Exported images are shared
+rather than written to the photo library, and are not added to the document
+library, which holds PDFs.
 
 ## Architecture
 

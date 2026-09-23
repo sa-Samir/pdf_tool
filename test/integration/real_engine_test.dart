@@ -11,6 +11,8 @@ import 'package:pdf_manipulator/pdf_manipulator.dart';
 import 'package:pdf_toolbox/core/engine/pdf_failure.dart';
 import 'package:pdf_toolbox/core/engine/pdf_manipulator_engine.dart';
 import 'package:pdf_toolbox/core/engine/compression.dart';
+import 'package:pdf_toolbox/core/engine/pdf_engine.dart';
+import 'package:pdf_toolbox/core/images/page_layout.dart';
 import 'package:pdf_toolbox/core/pages/page_edit_session.dart';
 
 /// Exercises the real Rust engine, not a fake. Everything else in the suite
@@ -411,6 +413,126 @@ void main() {
         onStep: (completed, _) => steps.add(completed),
       );
       expect(steps, [1, 2, 3]);
+    });
+  });
+
+  group('images to PDF', () {
+    test('one page per image, at the size asked for', () async {
+      final image = writeNoisyPng(File('${dir.path}/photo.png'), width: 400, height: 300);
+      final out = File('${dir.path}/photos.pdf');
+
+      await engine.imagesToPdf(
+        images: [
+          for (var i = 0; i < 3; i++)
+            PlacedImage(
+              file: image,
+              placement: const PagePlacement(
+                pageWidth: 595.28,
+                pageHeight: 841.89,
+                x: 20,
+                y: 200,
+                width: 555,
+                height: 416,
+              ),
+            ),
+        ],
+        output: out,
+      );
+
+      expect((await engine.inspect(out)).pageCount, 3);
+      final geometry = await engine.pageGeometry(out);
+      expect(geometry, hasLength(3));
+      expect(geometry.first.width, closeTo(595.28, 0.5));
+      expect(geometry.first.height, closeTo(841.89, 0.5));
+    });
+
+    test('pages can differ in size within one document', () async {
+      final image = writeNoisyPng(File('${dir.path}/p2.png'), width: 300, height: 300);
+      final out = File('${dir.path}/mixed-sizes.pdf');
+
+      await engine.imagesToPdf(
+        images: [
+          PlacedImage(
+            file: image,
+            placement: const PagePlacement(
+              pageWidth: 300, pageHeight: 300, x: 0, y: 0,
+              width: 300, height: 300,
+            ),
+          ),
+          PlacedImage(
+            file: image,
+            placement: const PagePlacement(
+              pageWidth: 841.89, pageHeight: 595.28, x: 0, y: 0,
+              width: 595, height: 595,
+            ),
+          ),
+        ],
+        output: out,
+      );
+
+      final geometry = await engine.pageGeometry(out);
+      expect(geometry[0].width, closeTo(300, 0.5));
+      expect(geometry[1].width, closeTo(841.89, 0.5));
+    });
+
+    test('reports progress per image', () async {
+      final image = writeNoisyPng(File('${dir.path}/p3.png'), width: 200, height: 200);
+      final steps = <int>[];
+      await engine.imagesToPdf(
+        images: [
+          for (var i = 0; i < 2; i++)
+            PlacedImage(
+              file: image,
+              placement: const PagePlacement(
+                pageWidth: 200, pageHeight: 200, x: 0, y: 0,
+                width: 200, height: 200,
+              ),
+            ),
+        ],
+        output: File('${dir.path}/progress-images.pdf'),
+        onStep: (completed, _) => steps.add(completed),
+      );
+      expect(steps, [1, 2, 3]);
+    });
+  });
+
+  group('PDF to images', () {
+    test('renders at the pixel size derived from a DPI', () async {
+      final source = await makePdf('export.pdf', 2);
+      final geometry = await engine.pageGeometry(source);
+      final (width, height) = geometry.first.pixelsAt(150);
+
+      // A4 at 150 dpi is about 1240 x 1754.
+      expect(width, closeTo(1240, 8));
+      expect(height, closeTo(1754, 8));
+
+      final bytes = await engine.renderPageAt(
+        input: source,
+        pageIndex: 0,
+        pixelWidth: width,
+        pixelHeight: height,
+      );
+      expect(bytes.sublist(0, 4), [0x89, 0x50, 0x4E, 0x47]);
+      expect(bytes.length, greaterThan(1000));
+    });
+
+    test('a higher DPI produces a bigger image', () async {
+      final source = await makePdf('dpi.pdf', 1);
+      final geometry = await engine.pageGeometry(source);
+
+      final low = geometry.first.pixelsAt(72);
+      final high = geometry.first.pixelsAt(300);
+      expect(high.$1, greaterThan(low.$1 * 3));
+
+      final small = await engine.renderPageAt(
+        input: source, pageIndex: 0,
+        pixelWidth: low.$1, pixelHeight: low.$2,
+      );
+      final large = await engine.renderPageAt(
+        input: source, pageIndex: 0,
+        pixelWidth: high.$1, pixelHeight: high.$2,
+      );
+      expect(large.length, greaterThan(small.length));
     });
   });
 }
