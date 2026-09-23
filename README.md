@@ -27,11 +27,16 @@ Phase 1 foundation and the first two tools (roadmap.md 5, 7).
   crash sweep at launch.
 - Import through the system document picker, copied into the sandbox.
 - **Merge** and **Split** end to end, including share/export.
+- **Page grid**: one screen behind Rotate, Reorder, Delete, Duplicate and
+  Extract. Multi-select, drag to reorder with edge auto-scroll, one undo stack
+  across every kind of edit, and a single save (requirements.md 3.6).
+- Lazily rendered page thumbnails with a bounded LRU cache.
 
 **Not yet**
 
-Remaining tools are placeholder screens. Recents is an empty stub until the
-file store lands (Phase 2), and there is no viewer or page grid yet.
+Compress, Images to PDF and PDF to Images are still placeholder screens.
+Recents is an empty stub until the file store lands, and there is no
+full-page viewer yet (the grid covers page-level work).
 
 ## Architecture
 

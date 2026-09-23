@@ -6,6 +6,7 @@ import '../../core/recents/recent_document.dart';
 import '../../core/recents/recents_repository.dart';
 import '../../core/theme/app_theme.dart';
 import '../merge/merge_page.dart';
+import '../pages/page_grid_page.dart';
 import '../settings/settings_page.dart';
 import '../split/split_page.dart';
 import '../tool/tool_placeholder_page.dart';
@@ -47,6 +48,14 @@ class _HomePageState extends State<HomePage> {
   static Widget _screenFor(PdfTool tool) => switch (tool.id) {
         'merge' => const MergePage(),
         'split' => const SplitPage(),
+        // Five tools, one screen: the page grid serves them all
+        // (requirements.md 3.6).
+        'reorder' ||
+        'rotate' ||
+        'delete_pages' ||
+        'duplicate' ||
+        'extract' =>
+          PageGridPage(tool: tool),
         _ => ToolPlaceholderPage(tool: tool),
       };
 

@@ -5,6 +5,7 @@ import 'package:pdf_toolbox/app/app.dart';
 import 'package:pdf_toolbox/core/files/document_store.dart';
 import 'package:pdf_toolbox/core/services/app_services.dart';
 import 'package:pdf_toolbox/features/merge/merge_page.dart';
+import 'package:pdf_toolbox/features/pages/page_grid_page.dart';
 import 'package:pdf_toolbox/core/catalog/tool_catalog.dart';
 import 'package:pdf_toolbox/core/models/pdf_tool.dart';
 import 'package:pdf_toolbox/core/recents/recent_document.dart';
@@ -204,11 +205,29 @@ void main() {
       await _pumpHome(tester);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Rotate pages'));
+      await tester.tap(find.text('Compress'));
       await tester.pumpAndSettle();
       expect(find.byType(ToolPlaceholderPage), findsOneWidget);
       expect(find.textContaining('Not built yet'), findsOneWidget);
     });
+
+    // One test each: a loop inside a single testWidgets would keep the pushed
+    // route from the previous iteration.
+    for (final label in [
+      'Rotate pages',
+      'Delete pages',
+      'Reorder pages',
+      'Duplicate pages',
+      'Extract pages',
+    ]) {
+      testWidgets('$label opens the page grid', (tester) async {
+        await _pumpHome(tester);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+        expect(find.byType(PageGridPage), findsOneWidget);
+      });
+    }
   });
 
   group('app', () {

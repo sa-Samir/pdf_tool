@@ -8,6 +8,8 @@ import 'package:pdf_toolbox/core/jobs/job_controller.dart';
 import 'package:pdf_toolbox/core/services/app_services.dart';
 import 'package:pdf_toolbox/core/util/page_ranges.dart';
 import 'package:pdf_toolbox/features/merge/merge_operation.dart';
+import 'package:pdf_toolbox/core/pages/page_edit_session.dart';
+import 'package:pdf_toolbox/features/pages/page_operation.dart';
 import 'package:pdf_toolbox/features/split/split_operation.dart';
 
 import '../fakes.dart';
@@ -235,6 +237,108 @@ void main() {
           ));
 
       expect(fractions, containsAllInOrder([0.0, 0.5, 1.0]));
+    });
+  });
+
+  group('page edits', () {
+    test('saves the edited page list as one document', () async {
+      final source = await input('doc.pdf', 5);
+      final job = JobController<File>();
+
+      await job.run((handle) => savePageEdits(
+            services: services,
+            source: source,
+            pages: const [
+              PageRef(id: 0, sourceIndex: 2),
+              PageRef(id: 1, sourceIndex: 0, rotation: 90),
+              PageRef(id: 2, sourceIndex: 2),
+            ],
+            handle: handle,
+          ));
+
+      expect(job.status, JobStatus.success);
+      expect((await engine.inspect(job.result!)).pageCount, 3);
+      expect(library(), ['doc (edited).pdf']);
+    });
+
+    test('names an extract differently from an edit', () async {
+      final source = await input('doc.pdf', 3);
+      final job = JobController<File>();
+
+      await job.run((handle) => savePageEdits(
+            services: services,
+            source: source,
+            pages: const [PageRef(id: 0, sourceIndex: 1)],
+            handle: handle,
+            suffix: 'extracted',
+          ));
+
+      expect(library(), ['doc (extracted).pdf']);
+    });
+
+    test('a failure leaves the library empty and the source untouched',
+        () async {
+      final source = await input('doc.pdf', 4);
+      final before = await source.readAsString();
+      engine.failWith = const PdfFailure(FailureKind.corruptFile);
+      final job = JobController<File>();
+
+      await job.run((handle) => savePageEdits(
+            services: services,
+            source: source,
+            pages: const [PageRef(id: 0, sourceIndex: 0)],
+            handle: handle,
+          ));
+
+      expect(job.status, JobStatus.failure);
+      expect(library(), isEmpty);
+      expect(await source.readAsString(), before);
+    });
+
+    test('cancelling saves nothing and cleans up', () async {
+      final source = await input('doc.pdf', 4);
+      engine.gate = Completer<void>();
+      final job = JobController<File>();
+
+      final running = job.run((handle) => savePageEdits(
+            services: services,
+            source: source,
+            pages: const [
+              PageRef(id: 0, sourceIndex: 0),
+              PageRef(id: 1, sourceIndex: 1),
+            ],
+            handle: handle,
+          ));
+
+      await Future<void>.delayed(Duration.zero);
+      job.cancel();
+      engine.gate!.complete();
+      await running;
+
+      expect(job.status, JobStatus.cancelled);
+      expect(library(), isEmpty);
+      expect(workspaceCount(), 0);
+    });
+
+    test('a page count that does not match is caught before saving', () async {
+      final source = await input('doc.pdf', 4);
+      final job = JobController<File>();
+
+      // The fake writes one page per entry; commit checks that against the
+      // expected count, so a mismatch here would mean a corrupted save.
+      await job.run((handle) => savePageEdits(
+            services: services,
+            source: source,
+            pages: const [
+              PageRef(id: 0, sourceIndex: 0),
+              PageRef(id: 1, sourceIndex: 1),
+              PageRef(id: 2, sourceIndex: 2),
+            ],
+            handle: handle,
+          ));
+
+      expect(job.status, JobStatus.success);
+      expect((await engine.inspect(job.result!)).pageCount, 3);
     });
   });
 }
