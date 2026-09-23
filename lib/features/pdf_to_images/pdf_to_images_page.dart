@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/engine/pdf_failure.dart';
 import '../../core/files/file_importer.dart';
+import '../../core/images/gallery_saver.dart';
 import '../../core/jobs/job_controller.dart';
 import '../../core/services/app_services.dart';
 import '../../core/theme/app_theme.dart';
@@ -363,15 +364,43 @@ class _EstimateCard extends StatelessWidget {
   }
 }
 
-class _Exported extends StatelessWidget {
+class _Exported extends StatefulWidget {
   const _Exported({required this.files, required this.onAgain});
 
   final List<File> files;
   final VoidCallback onAgain;
 
   @override
+  State<_Exported> createState() => _ExportedState();
+}
+
+class _ExportedState extends State<_Exported> {
+  bool _saving = false;
+
+  Future<void> _saveToPhotos() async {
+    final services = AppServicesScope.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _saving = true);
+    final outcome = await services.gallery.save(widget.files, album: 'PDF Toolbox');
+    if (!mounted) return;
+    setState(() => _saving = false);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(switch (outcome) {
+          GallerySaveOutcome.saved =>
+            'Saved ${widget.files.length} to your photos.',
+          GallerySaveOutcome.denied =>
+            'Photo access is off. You can turn it on in Settings.',
+          GallerySaveOutcome.failed => "Couldn't save to your photos.",
+        }),
+      ));
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final files = widget.files;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -394,11 +423,20 @@ class _Exported extends StatelessWidget {
           ),
         ),
         const SizedBox(height: Insets.md),
+        if (AppServicesScope.of(context).gallery.isSupported)
+          Padding(
+            padding: const EdgeInsets.only(bottom: Insets.sm),
+            child: OutlinedButton.icon(
+              onPressed: _saving ? null : _saveToPhotos,
+              icon: const Icon(Icons.photo_library_outlined),
+              label: Text(_saving ? 'Saving...' : 'Save to Photos'),
+            ),
+          ),
         Row(
           children: [
             Expanded(
               child: OutlinedButton(
-                onPressed: onAgain,
+                onPressed: widget.onAgain,
                 child: const Text('Export again'),
               ),
             ),

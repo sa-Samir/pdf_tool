@@ -17,11 +17,14 @@ class ThumbnailCache {
     this.maxEntries = 80,
     this.maxBytes = 24 * 1024 * 1024,
     this.pixelSize = 220,
+    String? password,
   })  : _engine = engine,
-        _file = file;
+        _file = file,
+        _password = password;
 
   final PdfEngine _engine;
   final File _file;
+  final String? _password;
 
   /// Hard caps. Whichever is reached first starts evicting.
   final int maxEntries;
@@ -69,6 +72,7 @@ class ThumbnailCache {
         input: _file,
         pageIndex: sourceIndex,
         maxSize: pixelSize,
+        password: _password,
       );
       if (!_disposed) _store(sourceIndex, bytes);
       return bytes;

@@ -33,6 +33,7 @@ void main() {
       ),
       importer: FakeFileImporter([]),
       library: libraryRepo,
+      gallery: FakeGallerySaver(),
     );
   });
 

@@ -42,6 +42,11 @@ Phase 1 foundation and the first two tools (roadmap.md 5, 7).
   presets, an honest pre-flight that never promises a percentage, real
   before/after numbers, a side-by-side page comparison, and an
   "already optimized" outcome that costs the user nothing.
+- **Viewer**: continuous lazy scroll, pinch and double-tap zoom, page indicator
+  and go-to-page, a password gate for encrypted files, and text search with
+  highlighted hits and next/previous.
+- **Folders**: create, rename, delete and move. Deleting a folder keeps its
+  files. Browsing stays in a folder; searching looks everywhere.
 - **Library**: a local SQLite record of everything the app produces, wired into
   every save. Recents on the home screen, a Files screen with search, sort and
   favourites, rename/share/delete, retention, and clear-history in Settings.
@@ -50,11 +55,12 @@ Every tool in the v1.0 set is built.
 
 **Not yet**
 
-Folders (requirements.md 5.1) are not built, so the library is flat. There is
-no full-page viewer, so opening a file hands it to the platform. Per-image
-cropping in Images to PDF is not built; rotation is. Exported images are shared
-rather than written to the photo library, and are not added to the document
-library, which holds PDFs.
+Per-image cropping in Images to PDF is not built; rotation is. It needs both a
+drag-handle cropping surface and a crop operation the current image pipeline
+cannot do, so it deserves its own pass rather than being tacked on.
+
+Exported images are not added to the document library, which holds PDFs; they
+are shared or saved to the photo library instead.
 
 ## Architecture
 

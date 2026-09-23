@@ -35,6 +35,7 @@ void main() {
       ),
       importer: FakeFileImporter([]),
       library: library,
+      gallery: FakeGallerySaver(),
       images: normalizer,
     );
   });

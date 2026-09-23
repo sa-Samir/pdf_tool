@@ -310,4 +310,156 @@ void main() {
     expect(await second.getVersion(), SqfliteLibraryRepository.schemaVersion);
     await second.close();
   });
+
+  group('folders', () {
+    test('a new folder starts empty', () async {
+      final folder = await library.createFolder('Contracts');
+
+      expect(folder.name, 'Contracts');
+      final all = await library.folders();
+      expect(all, hasLength(1));
+      expect(all.single.documentCount, 0);
+    });
+
+    test('a folder name must be unique and non-empty', () async {
+      await library.createFolder('Taxes');
+      await expectLater(
+        library.createFolder('  taxes  '),
+        throwsA(isA<StateError>()),
+      );
+      await expectLater(
+        library.createFolder('   '),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('moving a document files it, and the count follows', () async {
+      final folder = await library.createFolder('Invoices');
+      final doc = await library.record(
+        file: await output('inv.pdf'),
+        operation: 'Merged',
+        toolId: 'merge',
+      );
+
+      await library.moveToFolder(doc.id, folder.id);
+
+      expect((await library.folders()).single.documentCount, 1);
+      expect(
+        await library.list(scope: FolderScope.inside(folder.id)),
+        hasLength(1),
+      );
+      expect(await library.list(scope: FolderScope.root), isEmpty);
+      // Everywhere still sees it.
+      expect(await library.list(), hasLength(1));
+    });
+
+    test('a document can be moved back out of a folder', () async {
+      final folder = await library.createFolder('Temp');
+      final doc = await library.record(
+        file: await output('x.pdf'),
+        operation: 'Merged',
+        toolId: 'merge',
+      );
+      await library.moveToFolder(doc.id, folder.id);
+      await library.moveToFolder(doc.id, null);
+
+      expect(await library.list(scope: FolderScope.root), hasLength(1));
+      expect((await library.folders()).single.documentCount, 0);
+    });
+
+    test('deleting a folder keeps its documents', () async {
+      final folder = await library.createFolder('Doomed');
+      final doc = await library.record(
+        file: await output('keeper.pdf'),
+        operation: 'Merged',
+        toolId: 'merge',
+      );
+      await library.moveToFolder(doc.id, folder.id);
+
+      await library.deleteFolder(folder.id);
+
+      // Requirements.md 5.2: deleting a folder is not a way to lose files.
+      expect(await library.folders(), isEmpty);
+      final remaining = await library.list();
+      expect(remaining, hasLength(1));
+      expect(remaining.single.folderId, isNull);
+      expect(await library.fileFor(remaining.single), isNotNull);
+    });
+
+    test('renaming rejects a name another folder already has', () async {
+      await library.createFolder('A');
+      final b = await library.createFolder('B');
+      await expectLater(
+        library.renameFolder(b.id, 'a'),
+        throwsA(isA<StateError>()),
+      );
+      expect((await library.renameFolder(b.id, 'C')).name, 'C');
+    });
+
+    test('clearing the library also clears the folders', () async {
+      await library.createFolder('Gone');
+      await library.clearAll();
+      expect(await library.folders(), isEmpty);
+    });
+  });
+
+  group('schema migration', () {
+    test('a v1 database gains folders without losing its documents',
+        () async {
+      final path = p.join(root.path, 'legacy.db');
+
+      // Build the v1 schema by hand, as a device on the old version would have.
+      final v1 = await databaseFactory.openDatabase(
+        path,
+        options: OpenDatabaseOptions(version: 1),
+      );
+      await v1.execute('''
+        CREATE TABLE documents (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          relative_path TEXT NOT NULL,
+          size_bytes INTEGER NOT NULL,
+          page_count INTEGER,
+          operation TEXT NOT NULL,
+          tool_id TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          favorite INTEGER NOT NULL DEFAULT 0
+        )
+      ''');
+      await v1.insert('documents', {
+        'id': 'old-1',
+        'name': 'legacy.pdf',
+        'relative_path': 'legacy.pdf',
+        'size_bytes': 1234,
+        'page_count': 3,
+        'operation': 'Merged',
+        'tool_id': 'merge',
+        'created_at': DateTime(2026, 1, 1).millisecondsSinceEpoch,
+        'favorite': 1,
+      });
+      await v1.close();
+
+      // Reopening runs the migration.
+      final upgraded = await SqfliteLibraryRepository.open(path);
+      final repo = SqfliteLibraryRepository(store: store, database: upgraded);
+
+      expect(await upgraded.getVersion(),
+          SqfliteLibraryRepository.schemaVersion);
+
+      final documents = await repo.list();
+      expect(documents, hasLength(1));
+      expect(documents.single.name, 'legacy.pdf');
+      expect(documents.single.favorite, isTrue, reason: 'data preserved');
+      expect(documents.single.folderId, isNull, reason: 'new column defaults');
+
+      // And the new features work on the migrated database.
+      final folder = await repo.createFolder('New');
+      await repo.moveToFolder('old-1', folder.id);
+      expect(
+        await repo.list(scope: FolderScope.inside(folder.id)),
+        hasLength(1),
+      );
+      await upgraded.close();
+    });
+  });
 }

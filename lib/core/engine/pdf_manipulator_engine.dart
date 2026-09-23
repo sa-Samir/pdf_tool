@@ -419,6 +419,40 @@ class PdfManipulatorEngine implements PdfEngine {
   }
 
   @override
+  Future<List<TextHit>> search({
+    required File input,
+    required String query,
+    CancelToken? cancel,
+    String? password,
+  }) async {
+    if (query.trim().isEmpty) return const [];
+    final doc = await _guard(
+      () => _pdf.open(FileSource(input), password: password),
+      cancel,
+    );
+    try {
+      cancel?.throwIfCancelled();
+      final hits = await _guard(
+        () => doc.search(query: query, pages: const px.PdfPages.all()),
+        cancel,
+      );
+      return [
+        for (final hit in hits)
+          TextHit(
+            pageIndex: hit.page,
+            text: hit.text,
+            x: hit.rect.x,
+            y: hit.rect.y,
+            width: hit.rect.width,
+            height: hit.rect.height,
+          ),
+      ];
+    } finally {
+      await doc.dispose();
+    }
+  }
+
+  @override
   Future<void> dispose() => _pdf.dispose();
 
   Future<int> _sizeOf(File file) async {

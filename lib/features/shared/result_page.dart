@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import '../../core/services/app_services.dart';
 import '../../core/theme/app_theme.dart';
+import '../viewer/viewer_page.dart';
 import 'job_views.dart';
 
 /// What the user sees after an operation succeeds (requirements.md 6).
@@ -94,6 +95,8 @@ class _ResultTile extends StatelessWidget {
 
   final File file;
 
+  bool get _isPdf => p.extension(file.path).toLowerCase() == '.pdf';
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -101,6 +104,14 @@ class _ResultTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: Insets.sm),
       child: Card(
         child: ListTile(
+          onTap: _isPdf
+              ? () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => PdfViewerPage(file: file),
+                    ),
+                  )
+              : null,
+          trailing: _isPdf ? const Icon(Icons.chevron_right) : null,
           leading: Icon(
             Icons.picture_as_pdf_outlined,
             color: theme.colorScheme.primary,

@@ -43,6 +43,7 @@ Widget _host(
       store: DocumentStore(engine: engine),
       importer: FakeFileImporter([]),
       library: library,
+      gallery: FakeGallerySaver(),
     ),
     child: MaterialApp(home: child),
   );

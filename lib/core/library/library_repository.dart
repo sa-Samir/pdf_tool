@@ -21,7 +21,23 @@ abstract interface class LibraryRepository {
     String query = '',
     bool favouritesOnly = false,
     int limit = 0,
+    FolderScope scope = FolderScope.everywhere,
   });
+
+  /// Folders, oldest first, each with the number of documents in it.
+  Future<List<LibraryFolder>> folders();
+
+  Future<LibraryFolder> createFolder(String name);
+
+  Future<LibraryFolder> renameFolder(String id, String name);
+
+  /// Removes the folder. Its documents move back out rather than being
+  /// deleted: requirements.md 5.2 -- the app never deletes a user's files as a
+  /// side effect of something else.
+  Future<void> deleteFolder(String id);
+
+  /// Files a document into [folderId], or out of any folder when null.
+  Future<void> moveToFolder(String documentId, String? folderId);
 
   Future<LibraryDocument?> byId(String id);
 

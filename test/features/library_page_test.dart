@@ -19,6 +19,7 @@ void main() {
       store: DocumentStore(engine: engine),
       importer: FakeFileImporter([]),
       library: library,
+      gallery: FakeGallerySaver(),
     );
   }
 
@@ -164,5 +165,111 @@ void main() {
       find.text('That file is no longer on this device.'),
       findsOneWidget,
     );
+  });
+
+  group('folders', () {
+    testWidgets('a new folder appears in the list', (tester) async {
+      await pump(tester, sample);
+      await tester.tap(find.byTooltip('New folder'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).last, 'Contracts');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Contracts'), findsOneWidget);
+      expect(find.text('Empty'), findsOneWidget);
+    });
+
+    testWidgets('opening a folder shows only its contents', (tester) async {
+      await pump(tester, sample);
+      final folder = await library.createFolder('Invoices');
+      await library.moveToFolder('invoice.pdf', folder.id);
+      await tester.tap(find.byTooltip('Favourites only'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Show all'));
+      await tester.pumpAndSettle();
+
+      // At the root, a filed document is not listed; the folder is.
+      expect(find.text('Invoices'), findsOneWidget);
+      expect(find.text('invoice.pdf'), findsNothing);
+
+      await tester.tap(find.text('Invoices'));
+      await tester.pumpAndSettle();
+      expect(find.text('invoice.pdf'), findsOneWidget);
+      expect(find.text('notes.pdf'), findsNothing);
+    });
+
+    testWidgets('an empty folder says how to fill it', (tester) async {
+      await pump(tester, const []);
+      await library.createFolder('Empty one');
+      await tester.tap(find.byTooltip('Favourites only'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Show all'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Empty one'));
+      await tester.pumpAndSettle();
+      expect(find.text('This folder is empty'), findsOneWidget);
+    });
+
+    testWidgets('deleting a folder warns that the files stay',
+        (tester) async {
+      await pump(tester, sample);
+      await library.createFolder('Doomed');
+      await tester.tap(find.byTooltip('Favourites only'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Show all'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('More actions for Doomed'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete folder'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('the files in it stay'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete folder'));
+      await tester.pumpAndSettle();
+      expect(find.text('Doomed'), findsNothing);
+    });
+
+    testWidgets('a document can be moved into a folder', (tester) async {
+      await pump(tester, sample);
+      await library.createFolder('Filed');
+      await tester.tap(find.byTooltip('Favourites only'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Show all'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('More actions for notes.pdf'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Move to folder'));
+      await tester.pumpAndSettle();
+      // The folder name also shows in the list behind the sheet.
+      await tester.tap(find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Filed'),
+      ));
+      await tester.pumpAndSettle();
+
+      final moved = await library.byId('notes.pdf');
+      expect(moved!.folderId, isNotNull);
+      expect(find.text('notes.pdf'), findsNothing);
+    });
+
+    testWidgets('searching looks inside folders too', (tester) async {
+      await pump(tester, sample);
+      final folder = await library.createFolder('Hidden');
+      await library.moveToFolder('invoice.pdf', folder.id);
+      await tester.tap(find.byTooltip('Favourites only'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Show all'));
+      await tester.pumpAndSettle();
+      expect(find.text('invoice.pdf'), findsNothing);
+
+      await tester.enterText(find.byType(TextField).first, 'invoice');
+      await tester.pumpAndSettle();
+      expect(find.text('invoice.pdf'), findsOneWidget);
+    });
   });
 }

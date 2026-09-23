@@ -41,6 +41,16 @@ dependencies:
   path: ^1.9.1
   sqflite: ^2.4.2+1
   flutter_image_compress: ^2.5.1
+  gal: ^2.3.3
+
+# The PDF engine ships every capability by default. A source scan keeps only
+# the ones this app actually calls, which is the app-size budget in
+# requirements.md 13. Guessing wrong is loud: the engine raises a typed error
+# naming the missing capability.
+hooks:
+  user_defines:
+    pdf_manipulator:
+      keep: auto
 
 dev_dependencies:
   flutter_test:

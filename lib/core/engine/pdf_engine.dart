@@ -121,7 +121,35 @@ abstract interface class PdfEngine {
     String? password,
   });
 
+  /// Finds [query] in the document's text (requirements.md 3.2).
+  Future<List<TextHit>> search({
+    required File input,
+    required String query,
+    CancelToken? cancel,
+    String? password,
+  });
+
   Future<void> dispose();
+}
+
+/// One search hit, positioned in PDF points from the page's bottom-left.
+@immutable
+class TextHit {
+  const TextHit({
+    required this.pageIndex,
+    required this.text,
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
+  });
+
+  final int pageIndex;
+  final String text;
+  final double x;
+  final double y;
+  final double width;
+  final double height;
 }
 
 /// One page's size, in PDF points.

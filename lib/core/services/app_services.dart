@@ -10,6 +10,7 @@ import '../engine/pdf_manipulator_engine.dart';
 import '../files/document_store.dart';
 import '../files/export_service.dart';
 import '../files/file_importer.dart';
+import '../images/gallery_saver.dart';
 import '../images/image_normalizer.dart';
 import '../library/library_repository.dart';
 import '../library/sqflite_library_repository.dart';
@@ -27,6 +28,7 @@ class AppServices {
     required this.export,
     required this.library,
     required this.images,
+    required this.gallery,
   });
 
   factory AppServices({
@@ -36,6 +38,7 @@ class AppServices {
     LibraryRepository? library,
     ExportService export = const ExportService(),
     ImageNormalizer images = const PlatformImageNormalizer(),
+    GallerySaver gallery = const PlatformGallerySaver(),
   }) {
     final resolvedEngine = engine ?? PdfManipulatorEngine();
     final resolvedStore = store ?? DocumentStore(engine: resolvedEngine);
@@ -45,6 +48,7 @@ class AppServices {
       importer: importer ?? SystemFileImporter(store: resolvedStore),
       export: export,
       images: images,
+      gallery: gallery,
       library: library ??
           SqfliteLibraryRepository(
             store: resolvedStore,
@@ -66,6 +70,7 @@ class AppServices {
   final FileImporter importer;
   final LibraryRepository library;
   final ImageNormalizer images;
+  final GallerySaver gallery;
 
   Future<void> dispose() => engine.dispose();
 }

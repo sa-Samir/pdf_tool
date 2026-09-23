@@ -23,6 +23,7 @@ void main() {
       store: DocumentStore(engine: engine),
       importer: importer,
       library: FakeLibraryRepository(),
+      gallery: FakeGallerySaver(),
     );
   }
 

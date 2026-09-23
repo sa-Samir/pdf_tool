@@ -29,9 +29,12 @@ class SqfliteLibraryRepository implements LibraryRepository {
   final RetentionPolicy retention;
 
   static const _table = 'documents';
+  static const _folders = 'folders';
 
   /// Bumped whenever the schema changes; [migrate] handles the upgrade.
-  static const schemaVersion = 1;
+  ///   1 -- documents
+  ///   2 -- folders, and documents.folder_id
+  static const schemaVersion = 2;
 
   /// Opens (and migrates) the database at [path].
   ///
@@ -55,19 +58,36 @@ class SqfliteLibraryRepository implements LibraryRepository {
         operation TEXT NOT NULL,
         tool_id TEXT NOT NULL,
         created_at INTEGER NOT NULL,
-        favorite INTEGER NOT NULL DEFAULT 0
+        favorite INTEGER NOT NULL DEFAULT 0,
+        folder_id TEXT
       )
     ''');
     await db.execute(
       'CREATE INDEX idx_documents_created_at ON $_table (created_at DESC)',
     );
+    await _createFolderTable(db);
   }
 
-  /// Schema upgrades. Empty today because there is only one version, but the
-  /// seam exists from v1 so the first migration is not also the first time
-  /// anyone thinks about migrations.
+  static Future<void> _createFolderTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE $_folders (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    ''');
+  }
+
+  /// Schema upgrades, applied one version at a time so a device two versions
+  /// behind arrives at the same place as one that was only one behind.
   static Future<void> migrate(Database db, int from, int to) async {
-    // for (var v = from; v < to; v++) { ... }
+    for (var version = from; version < to; version++) {
+      switch (version) {
+        case 1:
+          await _createFolderTable(db);
+          await db.execute('ALTER TABLE $_table ADD COLUMN folder_id TEXT');
+      }
+    }
   }
 
   @override
@@ -76,10 +96,20 @@ class SqfliteLibraryRepository implements LibraryRepository {
     String query = '',
     bool favouritesOnly = false,
     int limit = 0,
+    FolderScope scope = FolderScope.everywhere,
   }) async {
     final where = <String>[];
     final args = <Object?>[];
     if (favouritesOnly) where.add('favorite = 1');
+    switch (scope) {
+      case FolderScopeRoot():
+        where.add('folder_id IS NULL');
+      case FolderScopeInside(:final folderId):
+        where.add('folder_id = ?');
+        args.add(folderId);
+      case FolderScopeEverywhere():
+        break;
+    }
     if (query.trim().isNotEmpty) {
       where.add('name LIKE ? ESCAPE ?');
       args
@@ -99,6 +129,79 @@ class SqfliteLibraryRepository implements LibraryRepository {
       limit: limit == 0 ? null : limit,
     );
     return [for (final row in rows) LibraryDocument.fromRow(row)];
+  }
+
+  @override
+  Future<List<LibraryFolder>> folders() async {
+    final rows = await (await _db).query(_folders, orderBy: 'created_at ASC');
+    final counts = await (await _db).rawQuery(
+      'SELECT folder_id, COUNT(*) AS n FROM $_table '
+      'WHERE folder_id IS NOT NULL GROUP BY folder_id',
+    );
+    final byFolder = {
+      for (final row in counts) row['folder_id'] as String: row['n']! as int,
+    };
+    return [
+      for (final row in rows)
+        LibraryFolder.fromRow(row, count: byFolder[row['id']] ?? 0),
+    ];
+  }
+
+  @override
+  Future<LibraryFolder> createFolder(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) throw StateError('a folder needs a name');
+    final existing = await folders();
+    if (existing.any((f) => f.name.toLowerCase() == trimmed.toLowerCase())) {
+      throw StateError('there is already a folder called $trimmed');
+    }
+    final folder = LibraryFolder(
+      id: '${DateTime.now().microsecondsSinceEpoch}-${trimmed.hashCode}',
+      name: trimmed,
+      createdAt: DateTime.now(),
+    );
+    await (await _db).insert(_folders, folder.toRow());
+    return folder;
+  }
+
+  @override
+  Future<LibraryFolder> renameFolder(String id, String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) throw StateError('a folder needs a name');
+    final all = await folders();
+    final folder = all.where((f) => f.id == id).firstOrNull;
+    if (folder == null) throw StateError('no folder $id');
+    if (all.any((f) =>
+        f.id != id && f.name.toLowerCase() == trimmed.toLowerCase())) {
+      throw StateError('there is already a folder called $trimmed');
+    }
+    final renamed = folder.copyWith(name: trimmed);
+    await (await _db)
+        .update(_folders, renamed.toRow(), where: 'id = ?', whereArgs: [id]);
+    return renamed;
+  }
+
+  @override
+  Future<void> deleteFolder(String id) async {
+    // The documents move out rather than going with it: deleting a folder is
+    // not a way to delete files by accident (requirements.md 5.2).
+    await (await _db).update(
+      _table,
+      {'folder_id': null},
+      where: 'folder_id = ?',
+      whereArgs: [id],
+    );
+    await (await _db).delete(_folders, where: 'id = ?', whereArgs: [id]);
+  }
+
+  @override
+  Future<void> moveToFolder(String documentId, String? folderId) async {
+    await (await _db).update(
+      _table,
+      {'folder_id': folderId},
+      where: 'id = ?',
+      whereArgs: [documentId],
+    );
   }
 
   @override
@@ -206,6 +309,7 @@ class SqfliteLibraryRepository implements LibraryRepository {
       await _deleteQuietly(await fileFor(document));
     }
     await (await _db).delete(_table);
+    await (await _db).delete(_folders);
   }
 
   /// Requirements.md 4: keep the last N, and nothing older than the max age.

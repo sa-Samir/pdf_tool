@@ -6,6 +6,7 @@ import 'package:pdf_toolbox/core/engine/compression.dart';
 import 'package:pdf_toolbox/core/engine/pdf_engine.dart';
 import 'package:pdf_toolbox/core/engine/pdf_failure.dart';
 import 'package:pdf_toolbox/core/files/file_importer.dart';
+import 'package:pdf_toolbox/core/images/gallery_saver.dart';
 import 'package:pdf_toolbox/core/images/image_normalizer.dart';
 import 'package:pdf_toolbox/core/jobs/cancel_token.dart';
 import 'package:pdf_toolbox/core/library/library_document.dart';
@@ -241,6 +242,21 @@ class FakePdfEngine implements PdfEngine {
     ]);
   }
 
+  /// Hits returned by [search], keyed by query.
+  final searchHits = <String, List<TextHit>>{};
+
+  @override
+  Future<List<TextHit>> search({
+    required File input,
+    required String query,
+    CancelToken? cancel,
+    String? password,
+  }) async {
+    calls.add('search:$query');
+    if (failWith case final failure?) throw failure;
+    return searchHits[query.trim()] ?? const [];
+  }
+
   @override
   Future<void> dispose() async => disposed = true;
 
@@ -420,11 +436,13 @@ class MemoryFakeEngine implements PdfEngine {
     File input, {
     CancelToken? cancel,
     String? password,
-  }) async =>
-      [
-        for (var i = 0; i < (pages[input.path] ?? 0); i++)
-          const PageGeometry(width: 595.28, height: 841.89),
-      ];
+  }) async {
+    _checkPassword(password);
+    return [
+      for (var i = 0; i < (pages[input.path] ?? 0); i++)
+        const PageGeometry(width: 595.28, height: 841.89),
+    ];
+  }
 
   @override
   Future<void> imagesToPdf({
@@ -447,6 +465,29 @@ class MemoryFakeEngine implements PdfEngine {
     renderCount++;
     return Uint8List.fromList([...kTinyPng, ...List.filled(2000, 0)]);
   }
+
+  /// Set to make opening demand a password, as an encrypted document would.
+  String? requiredPassword;
+
+  /// Hits returned by [search], keyed by query.
+  final searchHits = <String, List<TextHit>>{};
+
+  void _checkPassword(String? password) {
+    if (requiredPassword == null) return;
+    if (password == null) throw const PdfFailure(FailureKind.passwordRequired);
+    if (password != requiredPassword) {
+      throw const PdfFailure(FailureKind.wrongPassword);
+    }
+  }
+
+  @override
+  Future<List<TextHit>> search({
+    required File input,
+    required String query,
+    CancelToken? cancel,
+    String? password,
+  }) async =>
+      searchHits[query.trim()] ?? const [];
 
   @override
   Future<void> dispose() async {}
@@ -477,16 +518,25 @@ class FakeLibraryRepository implements LibraryRepository {
 
   List<LibraryDocument> get documents => List.unmodifiable(_documents);
 
+  final _folders = <LibraryFolder>[];
+
   @override
   Future<List<LibraryDocument>> list({
     LibrarySort sort = LibrarySort.newest,
     String query = '',
     bool favouritesOnly = false,
     int limit = 0,
+    FolderScope scope = FolderScope.everywhere,
   }) async {
     if (listDelay > Duration.zero) await Future<void>.delayed(listDelay);
     var result = _documents.where((d) {
       if (favouritesOnly && !d.favorite) return false;
+      final inScope = switch (scope) {
+        FolderScopeRoot() => d.folderId == null,
+        FolderScopeInside(:final folderId) => d.folderId == folderId,
+        FolderScopeEverywhere() => true,
+      };
+      if (!inScope) return false;
       if (query.trim().isEmpty) return true;
       return d.name.toLowerCase().contains(query.trim().toLowerCase());
     }).toList();
@@ -561,6 +611,59 @@ class FakeLibraryRepository implements LibraryRepository {
   Future<void> clearAll() async {
     clearCount++;
     _documents.clear();
+    _folders.clear();
+  }
+
+  @override
+  Future<List<LibraryFolder>> folders() async => [
+        for (final folder in _folders)
+          folder.copyWith(
+            documentCount:
+                _documents.where((d) => d.folderId == folder.id).length,
+          ),
+      ];
+
+  @override
+  Future<LibraryFolder> createFolder(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) throw StateError('a folder needs a name');
+    if (_folders.any((f) => f.name.toLowerCase() == trimmed.toLowerCase())) {
+      throw StateError('there is already a folder called $trimmed');
+    }
+    final folder = LibraryFolder(
+      id: 'folder-${_folders.length}',
+      name: trimmed,
+      createdAt: DateTime(2026, 9, 23),
+    );
+    _folders.add(folder);
+    return folder;
+  }
+
+  @override
+  Future<LibraryFolder> renameFolder(String id, String name) async {
+    final index = _folders.indexWhere((f) => f.id == id);
+    final renamed = _folders[index].copyWith(name: name.trim());
+    _folders[index] = renamed;
+    return renamed;
+  }
+
+  @override
+  Future<void> deleteFolder(String id) async {
+    for (var i = 0; i < _documents.length; i++) {
+      if (_documents[i].folderId == id) {
+        _documents[i] = _documents[i].copyWith(clearFolder: true);
+      }
+    }
+    _folders.removeWhere((f) => f.id == id);
+  }
+
+  @override
+  Future<void> moveToFolder(String documentId, String? folderId) async {
+    final index = _documents.indexWhere((d) => d.id == documentId);
+    if (index < 0) return;
+    _documents[index] = folderId == null
+        ? _documents[index].copyWith(clearFolder: true)
+        : _documents[index].copyWith(folderId: folderId);
   }
 }
 
@@ -583,3 +686,22 @@ LibraryDocument fakeLibraryDocument(
       createdAt: createdAt ?? DateTime(2026, 9, 23, 10, 0),
       favorite: favorite,
     );
+
+/// Gallery saver for tests: records what it was asked to save.
+class FakeGallerySaver implements GallerySaver {
+  FakeGallerySaver({this.isSupported = true, this.outcome = GallerySaveOutcome.saved});
+
+  @override
+  final bool isSupported;
+
+  GallerySaveOutcome outcome;
+  final saved = <String>[];
+
+  @override
+  Future<GallerySaveOutcome> save(List<File> images, {String? album}) async {
+    if (outcome == GallerySaveOutcome.saved) {
+      saved.addAll([for (final image in images) image.path]);
+    }
+    return outcome;
+  }
+}

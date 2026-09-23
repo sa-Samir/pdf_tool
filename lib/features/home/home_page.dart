@@ -10,6 +10,7 @@ import '../images_to_pdf/images_to_pdf_page.dart';
 import '../library/library_page.dart';
 import '../merge/merge_page.dart';
 import '../pdf_to_images/pdf_to_images_page.dart';
+import '../viewer/viewer_page.dart';
 import '../pages/page_grid_page.dart';
 import '../settings/settings_page.dart';
 import '../split/split_page.dart';
@@ -93,11 +94,24 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _openDocument(LibraryDocument document) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => LibraryPage(highlightId: document.id),
-      ),
-    );
+    final services = AppServicesScope.of(context);
+    final navigator = Navigator.of(context);
+    final file = await services.library.fileFor(document);
+    if (!mounted) return;
+    if (file == null) {
+      // The file went away behind our back; the list is the honest fallback.
+      await navigator.push(
+        MaterialPageRoute<void>(
+          builder: (_) => LibraryPage(highlightId: document.id),
+        ),
+      );
+    } else {
+      await navigator.push(
+        MaterialPageRoute<void>(
+          builder: (_) => PdfViewerPage(file: file, title: document.name),
+        ),
+      );
+    }
     if (mounted) _refreshRecents();
   }
 
