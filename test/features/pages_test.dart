@@ -22,6 +22,7 @@ void main() {
       engine: engine,
       store: DocumentStore(engine: engine),
       importer: importer,
+      library: FakeLibraryRepository(),
     );
   }
 

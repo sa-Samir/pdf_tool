@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/catalog/tool_catalog.dart';
+import '../../core/library/library_document.dart';
 import '../../core/models/pdf_tool.dart';
-import '../../core/recents/recent_document.dart';
-import '../../core/recents/recents_repository.dart';
+import '../../core/services/app_services.dart';
 import '../../core/theme/app_theme.dart';
+import '../library/library_page.dart';
 import '../merge/merge_page.dart';
 import '../pages/page_grid_page.dart';
 import '../settings/settings_page.dart';
@@ -18,9 +19,7 @@ import 'widgets/tool_search_field.dart';
 ///
 /// Renders and is interactive immediately; recents arrive asynchronously.
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, this.recentsRepository = const EmptyRecentsRepository()});
-
-  final RecentsRepository recentsRepository;
+  const HomePage({super.key});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -28,14 +27,21 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final _searchController = TextEditingController();
-  late Future<List<RecentDocument>> _recents;
+  Future<List<LibraryDocument>>? _recents;
   String _query = '';
 
   @override
-  void initState() {
-    super.initState();
-    _recents = widget.recentsRepository.load();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _recents ??= _loadRecents();
   }
+
+  Future<List<LibraryDocument>> _loadRecents() =>
+      AppServicesScope.of(context).library.list(limit: 10);
+
+  void _refreshRecents() => setState(() {
+        _recents = _loadRecents();
+      });
 
   @override
   void dispose() {
@@ -59,16 +65,34 @@ class _HomePageState extends State<HomePage> {
         _ => ToolPlaceholderPage(tool: tool),
       };
 
-  void _openTool(PdfTool tool) {
-    Navigator.of(context).push(
+  Future<void> _openTool(PdfTool tool) async {
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => _screenFor(tool)),
     );
+    // Coming back from a tool usually means a new file exists.
+    if (mounted) _refreshRecents();
   }
 
   void _openSettings() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
     );
+  }
+
+  Future<void> _openLibrary() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const LibraryPage()),
+    );
+    if (mounted) _refreshRecents();
+  }
+
+  Future<void> _openDocument(LibraryDocument document) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LibraryPage(highlightId: document.id),
+      ),
+    );
+    if (mounted) _refreshRecents();
   }
 
   void _openFile() {
@@ -100,6 +124,11 @@ class _HomePageState extends State<HomePage> {
               ),
               actions: [
                 IconButton(
+                  icon: const Icon(Icons.folder_outlined),
+                  tooltip: 'Files',
+                  onPressed: _openLibrary,
+                ),
+                IconButton(
                   icon: const Icon(Icons.settings_outlined),
                   tooltip: 'Settings',
                   onPressed: _openSettings,
@@ -122,11 +151,13 @@ class _HomePageState extends State<HomePage> {
                   ),
                   if (!isSearching) ...[
                     const SizedBox(height: Insets.lg),
-                    FutureBuilder<List<RecentDocument>>(
+                    FutureBuilder<List<LibraryDocument>>(
                       future: _recents,
                       builder: (context, snapshot) => RecentsSection(
                         recents: snapshot,
                         onOpenFile: _openFile,
+                        onSeeAll: _openLibrary,
+                        onOpenDocument: _openDocument,
                       ),
                     ),
                   ],

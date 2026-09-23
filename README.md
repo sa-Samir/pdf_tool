@@ -31,12 +31,15 @@ Phase 1 foundation and the first two tools (roadmap.md 5, 7).
   Extract. Multi-select, drag to reorder with edge auto-scroll, one undo stack
   across every kind of edit, and a single save (requirements.md 3.6).
 - Lazily rendered page thumbnails with a bounded LRU cache.
+- **Library**: a local SQLite record of everything the app produces, wired into
+  every save. Recents on the home screen, a Files screen with search, sort and
+  favourites, rename/share/delete, retention, and clear-history in Settings.
 
 **Not yet**
 
 Compress, Images to PDF and PDF to Images are still placeholder screens.
-Recents is an empty stub until the file store lands, and there is no
-full-page viewer yet (the grid covers page-level work).
+Folders are not built yet, and there is no full-page viewer (the grid covers
+page-level work; opening a file hands it to the platform).
 
 ## Architecture
 

@@ -145,3 +145,22 @@ String formatBytes(int bytes) {
   }
   return '${value < 10 ? value.toStringAsFixed(1) : value.round()} ${units[unit]}';
 }
+
+/// Short, human-readable age: "Just now", "2h ago", "Yesterday", "12 Sep".
+String formatRelativeTime(DateTime when, {DateTime? now}) {
+  final reference = now ?? DateTime.now();
+  final difference = reference.difference(when);
+
+  if (difference.inMinutes < 1) return 'Just now';
+  if (difference.inMinutes < 60) return '${difference.inMinutes}m ago';
+  if (difference.inHours < 24) return '${difference.inHours}h ago';
+  if (difference.inDays == 1) return 'Yesterday';
+  if (difference.inDays < 7) return '${difference.inDays}d ago';
+
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  final date = '${when.day} ${months[when.month - 1]}';
+  return when.year == reference.year ? date : '$date ${when.year}';
+}

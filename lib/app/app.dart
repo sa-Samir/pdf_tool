@@ -26,6 +26,8 @@ class _PdfToolboxAppState extends State<PdfToolboxApp> {
     // frame and unawaited, so it never delays launch.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _services.store.sweepWorkspaces();
+      // Requirements.md 4: entries whose file has gone are pruned at launch.
+      _services.library.pruneMissing();
     });
   }
 

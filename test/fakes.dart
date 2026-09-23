@@ -6,6 +6,8 @@ import 'package:pdf_toolbox/core/engine/pdf_engine.dart';
 import 'package:pdf_toolbox/core/engine/pdf_failure.dart';
 import 'package:pdf_toolbox/core/files/file_importer.dart';
 import 'package:pdf_toolbox/core/jobs/cancel_token.dart';
+import 'package:pdf_toolbox/core/library/library_document.dart';
+import 'package:pdf_toolbox/core/library/library_repository.dart';
 import 'package:pdf_toolbox/core/pages/page_edit_session.dart';
 
 /// A stand-in engine backed by tiny text files of the form `PAGES:n`.
@@ -241,4 +243,128 @@ ImportedDocument memoryDocument(String name, {int sizeBytes = 1024}) =>
       file: File('/memory/$name'),
       displayName: name,
       sizeBytes: sizeBytes,
+    );
+
+/// In-memory library for widget tests: no database, no filesystem.
+class FakeLibraryRepository implements LibraryRepository {
+  FakeLibraryRepository([List<LibraryDocument>? initial])
+      : _documents = [...?initial];
+
+  final List<LibraryDocument> _documents;
+  var pruneCount = 0;
+  var clearCount = 0;
+
+  /// Set to make [fileFor] report the file as gone.
+  var filesMissing = false;
+
+  /// Delays [list], so a test can observe the screen while recents load.
+  Duration listDelay = Duration.zero;
+
+  List<LibraryDocument> get documents => List.unmodifiable(_documents);
+
+  @override
+  Future<List<LibraryDocument>> list({
+    LibrarySort sort = LibrarySort.newest,
+    String query = '',
+    bool favouritesOnly = false,
+    int limit = 0,
+  }) async {
+    if (listDelay > Duration.zero) await Future<void>.delayed(listDelay);
+    var result = _documents.where((d) {
+      if (favouritesOnly && !d.favorite) return false;
+      if (query.trim().isEmpty) return true;
+      return d.name.toLowerCase().contains(query.trim().toLowerCase());
+    }).toList();
+
+    result.sort(switch (sort) {
+      LibrarySort.newest => (a, b) => b.createdAt.compareTo(a.createdAt),
+      LibrarySort.name =>
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      LibrarySort.size => (a, b) => b.sizeBytes.compareTo(a.sizeBytes),
+    });
+    if (limit > 0 && result.length > limit) {
+      result = result.sublist(0, limit);
+    }
+    return result;
+  }
+
+  @override
+  Future<LibraryDocument?> byId(String id) async =>
+      _documents.where((d) => d.id == id).firstOrNull;
+
+  @override
+  Future<LibraryDocument> record({
+    required File file,
+    required String operation,
+    required String toolId,
+    int? pageCount,
+  }) async {
+    final document = LibraryDocument(
+      id: '${_documents.length}-$operation',
+      name: file.path.split('/').last,
+      relativePath: file.path.split('/').last,
+      sizeBytes: 1024,
+      pageCount: pageCount,
+      operation: operation,
+      toolId: toolId,
+      createdAt: DateTime.now(),
+    );
+    _documents.insert(0, document);
+    return document;
+  }
+
+  @override
+  Future<LibraryDocument> rename(String id, String name) async {
+    final index = _documents.indexWhere((d) => d.id == id);
+    final renamed = _documents[index].copyWith(name: name);
+    _documents[index] = renamed;
+    return renamed;
+  }
+
+  @override
+  Future<void> setFavorite(String id, bool favorite) async {
+    final index = _documents.indexWhere((d) => d.id == id);
+    _documents[index] = _documents[index].copyWith(favorite: favorite);
+  }
+
+  @override
+  Future<void> delete(String id, {bool deleteFile = true}) async {
+    _documents.removeWhere((d) => d.id == id);
+  }
+
+  @override
+  Future<File?> fileFor(LibraryDocument document) async =>
+      filesMissing ? null : File('/memory/${document.relativePath}');
+
+  @override
+  Future<int> pruneMissing() async {
+    pruneCount++;
+    return 0;
+  }
+
+  @override
+  Future<void> clearAll() async {
+    clearCount++;
+    _documents.clear();
+  }
+}
+
+LibraryDocument fakeLibraryDocument(
+  String name, {
+  String operation = 'Merged',
+  int sizeBytes = 1024,
+  int? pageCount = 4,
+  bool favorite = false,
+  DateTime? createdAt,
+}) =>
+    LibraryDocument(
+      id: name,
+      name: name,
+      relativePath: name,
+      sizeBytes: sizeBytes,
+      pageCount: pageCount,
+      operation: operation,
+      toolId: 'merge',
+      createdAt: createdAt ?? DateTime(2026, 9, 23, 10, 0),
+      favorite: favorite,
     );

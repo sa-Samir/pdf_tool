@@ -18,10 +18,12 @@ void main() {
   late Directory root;
   late FakePdfEngine engine;
   late AppServices services;
+  late FakeLibraryRepository libraryRepo;
 
   setUp(() async {
     root = await Directory.systemTemp.createTemp('ops_test');
     engine = FakePdfEngine();
+    libraryRepo = FakeLibraryRepository();
     services = AppServices(
       engine: engine,
       store: DocumentStore(
@@ -30,6 +32,7 @@ void main() {
         tempRoot: () async => root,
       ),
       importer: FakeFileImporter([]),
+      library: libraryRepo,
     );
   });
 
@@ -339,6 +342,70 @@ void main() {
 
       expect(job.status, JobStatus.success);
       expect((await engine.inspect(job.result!)).pageCount, 3);
+    });
+  });
+
+  group('library recording', () {
+    test('a merge is recorded with what produced it', () async {
+      final inputs = [await input('a.pdf', 2), await input('b.pdf', 3)];
+      final job = JobController<File>();
+      await job.run((handle) => mergeDocuments(
+            services: services,
+            inputs: inputs,
+            handle: handle,
+            expectedPages: 5,
+          ));
+
+      final recorded = await libraryRepo.list();
+      expect(recorded, hasLength(1));
+      expect(recorded.single.name, 'a (merged).pdf');
+      expect(recorded.single.operation, contains('2 files'));
+      expect(recorded.single.pageCount, 5);
+      expect(recorded.single.toolId, 'merge');
+    });
+
+    test('a split records one entry per output', () async {
+      final job = JobController<List<File>>();
+      await job.run((handle) async => splitDocument(
+            services: services,
+            source: await input('r.pdf', 10),
+            ranges: const [PageRange(1, 2), PageRange(5, 5)],
+            handle: handle,
+          ));
+
+      final recorded = await libraryRepo.list();
+      expect(recorded, hasLength(2));
+      expect([for (final d in recorded) d.name],
+          containsAll(['r_1-2.pdf', 'r_5.pdf']));
+    });
+
+    test('a failed operation records nothing', () async {
+      engine.failWith = const PdfFailure(FailureKind.corruptFile);
+      final job = JobController<File>();
+      await job.run((handle) async => mergeDocuments(
+            services: services,
+            inputs: [await input('a.pdf', 1), await input('b.pdf', 1)],
+            handle: handle,
+          ));
+
+      expect(job.status, JobStatus.failure);
+      expect(await libraryRepo.list(), isEmpty);
+    });
+
+    test('a cancelled operation records nothing', () async {
+      engine.gate = Completer<void>();
+      final job = JobController<File>();
+      final running = job.run((handle) async => mergeDocuments(
+            services: services,
+            inputs: [await input('a.pdf', 1), await input('b.pdf', 1)],
+            handle: handle,
+          ));
+      await Future<void>.delayed(Duration.zero);
+      job.cancel();
+      engine.gate!.complete();
+      await running;
+
+      expect(await libraryRepo.list(), isEmpty);
     });
   });
 }

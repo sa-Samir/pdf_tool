@@ -3,55 +3,62 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:pdf_toolbox/app/app.dart';
 import 'package:pdf_toolbox/core/files/document_store.dart';
+import 'package:pdf_toolbox/core/library/library_document.dart';
 import 'package:pdf_toolbox/core/services/app_services.dart';
 import 'package:pdf_toolbox/features/merge/merge_page.dart';
 import 'package:pdf_toolbox/features/pages/page_grid_page.dart';
 import 'package:pdf_toolbox/core/catalog/tool_catalog.dart';
 import 'package:pdf_toolbox/core/models/pdf_tool.dart';
-import 'package:pdf_toolbox/core/recents/recent_document.dart';
-import 'package:pdf_toolbox/core/recents/recents_repository.dart';
 import 'package:pdf_toolbox/features/home/home_page.dart';
 import 'package:pdf_toolbox/features/tool/tool_placeholder_page.dart';
 
 import 'fakes.dart';
 
-class _FakeRecents implements RecentsRepository {
-  _FakeRecents({this.docs = const [], this.delay = Duration.zero});
-
-  final List<RecentDocument> docs;
-  final Duration delay;
-
-  @override
-  Future<List<RecentDocument>> load() async {
-    if (delay > Duration.zero) await Future<void>.delayed(delay);
-    return docs;
-  }
-}
+late FakeLibraryRepository library;
 
 AppServices _services() {
   final engine = MemoryFakeEngine(const {});
+  library = FakeLibraryRepository();
   return AppServices(
     engine: engine,
     store: DocumentStore(engine: engine),
     importer: FakeFileImporter([]),
+    library: library,
   );
 }
 
-Widget _host(Widget child) => AppServicesScope(
-      services: _services(),
-      child: MaterialApp(home: child),
-    );
+Widget _host(
+  Widget child, {
+  List<LibraryDocument> recents = const [],
+  Duration listDelay = Duration.zero,
+}) {
+  final engine = MemoryFakeEngine(const {});
+  library = FakeLibraryRepository(recents)..listDelay = listDelay;
+  return AppServicesScope(
+    services: AppServices(
+      engine: engine,
+      store: DocumentStore(engine: engine),
+      importer: FakeFileImporter([]),
+      library: library,
+    ),
+    child: MaterialApp(home: child),
+  );
+}
 
 /// Pumps the home screen on a surface tall enough to build every tool group.
 /// Slivers do not build off-screen children, so the default 800x600 test
 /// viewport would hide the lower groups from the finders.
-Future<void> _pumpHome(WidgetTester tester, {RecentsRepository? recents}) async {
+Future<void> _pumpHome(
+  WidgetTester tester, {
+  List<LibraryDocument> recents = const [],
+  Duration listDelay = Duration.zero,
+}) async {
   tester.view.physicalSize = const Size(1200, 3000);
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
-    _host(HomePage(recentsRepository: recents ?? _FakeRecents())),
+    _host(const HomePage(), recents: recents, listDelay: listDelay),
   );
 }
 
@@ -115,10 +122,7 @@ void main() {
 
   group('home screen', () {
     testWidgets('is interactive before recents finish loading', (tester) async {
-      await _pumpHome(
-        tester,
-        recents: _FakeRecents(delay: const Duration(seconds: 2)),
-      );
+      await _pumpHome(tester, listDelay: const Duration(seconds: 2));
       await tester.pump();
 
       // Recents are still loading...
@@ -163,19 +167,9 @@ void main() {
     });
 
     testWidgets('lists recent documents once they load', (tester) async {
-      await _pumpHome(
-        tester,
-        recents: _FakeRecents(docs: [
-          RecentDocument(
-            id: '1',
-            name: 'invoice.pdf',
-            sizeBytes: 6200000,
-            pageCount: 4,
-            lastOperation: 'Compressed',
-            modifiedAt: DateTime(2026, 9, 18, 10, 42),
-          ),
-        ]),
-      );
+      await _pumpHome(tester, recents: [
+        fakeLibraryDocument('invoice.pdf', operation: 'Compressed'),
+      ]);
       await tester.pumpAndSettle();
 
       expect(find.text('invoice.pdf'), findsOneWidget);

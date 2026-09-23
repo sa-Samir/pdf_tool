@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/app_settings.dart';
+import '../../core/services/app_services.dart';
 import '../../core/theme/app_theme.dart';
 
 /// Settings (requirements.md 11).
@@ -9,6 +10,39 @@ import '../../core/theme/app_theme.dart';
 /// features it configures. Unbuilt rows are absent rather than disabled.
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
+
+  /// Requirements.md 4: clearing history also deletes the files it describes,
+  /// so the wording says so and the action is confirmed.
+  Future<void> _confirmClear(BuildContext context) async {
+    final library = AppServicesScope.of(context).library;
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear history?'),
+        content: const Text(
+          'This forgets every file this app has made and deletes them from '
+          'the app. Files you already shared or saved elsewhere are not '
+          'affected. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await library.clearAll();
+    messenger.showSnackBar(
+      const SnackBar(content: Text('History cleared.')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +88,26 @@ class SettingsPage extends StatelessWidget {
                   ),
               ],
             ),
+          ),
+          const Divider(height: Insets.xxl),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                Insets.lg, 0, Insets.lg, Insets.sm),
+            child: Text(
+              'Files',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete_sweep_outlined),
+            title: const Text('Clear history'),
+            subtitle: const Text(
+              'Forgets your recent files and deletes them from this app.',
+            ),
+            onTap: () => _confirmClear(context),
           ),
           const Divider(height: Insets.xxl),
           Padding(

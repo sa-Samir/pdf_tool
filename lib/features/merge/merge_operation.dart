@@ -31,11 +31,18 @@ Future<File> mergeDocuments({
       ),
     );
     handle.cancel.throwIfCancelled();
-    return await services.store.commit(
+    final saved = await services.store.commit(
       temp,
       desiredName: name,
       expectedPages: expectedPages,
     );
+    await services.library.record(
+      file: saved,
+      operation: 'Merged from ${inputs.length} files',
+      toolId: 'merge',
+      pageCount: expectedPages,
+    );
+    return saved;
   } finally {
     // Requirements.md 5.2: nothing partial survives, however this ended.
     await workspace.dispose();

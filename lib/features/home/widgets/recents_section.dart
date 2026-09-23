@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/recents/recent_document.dart';
+import '../../../core/library/library_document.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../shared/job_views.dart';
 
 /// Recent files strip (requirements.md 4).
 ///
@@ -12,10 +13,14 @@ class RecentsSection extends StatelessWidget {
     super.key,
     required this.recents,
     required this.onOpenFile,
+    required this.onSeeAll,
+    required this.onOpenDocument,
   });
 
-  final AsyncSnapshot<List<RecentDocument>> recents;
+  final AsyncSnapshot<List<LibraryDocument>> recents;
   final VoidCallback onOpenFile;
+  final VoidCallback onSeeAll;
+  final void Function(LibraryDocument document) onOpenDocument;
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +30,7 @@ class RecentsSection extends StatelessWidget {
       return const _RecentsPlaceholder();
     }
 
-    final docs = recents.data ?? const <RecentDocument>[];
+    final docs = recents.data ?? const <LibraryDocument>[];
     if (docs.isEmpty) {
       // Requirements.md 3.0: every empty state names the action that fills it
       // and offers that action as a button.
@@ -70,14 +75,36 @@ class RecentsSection extends StatelessWidget {
       );
     }
 
-    return SizedBox(
-      height: 96,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: docs.length,
-        separatorBuilder: (_, _) => const SizedBox(width: Insets.md),
-        itemBuilder: (context, i) => _RecentTile(document: docs[i]),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Recent',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            TextButton(onPressed: onSeeAll, child: const Text('See all')),
+          ],
+        ),
+        const SizedBox(height: Insets.sm),
+        SizedBox(
+          height: 104,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: docs.length,
+            separatorBuilder: (_, _) => const SizedBox(width: Insets.md),
+            itemBuilder: (context, i) => _RecentTile(
+              document: docs[i],
+              onTap: () => onOpenDocument(docs[i]),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -106,38 +133,71 @@ class _RecentsPlaceholder extends StatelessWidget {
 }
 
 class _RecentTile extends StatelessWidget {
-  const _RecentTile({required this.document});
+  const _RecentTile({required this.document, required this.onTap});
 
-  final RecentDocument document;
+  final LibraryDocument document;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Card(
-      child: Container(
-        width: 190,
-        padding: const EdgeInsets.all(Insets.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              document.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: Insets.xs),
-            Text(
-              document.lastOperation,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          width: 200,
+          padding: const EdgeInsets.all(Insets.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.picture_as_pdf_outlined,
+                    size: 18,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: Insets.sm),
+                  Expanded(
+                    child: Text(
+                      document.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  if (document.favorite)
+                    Icon(
+                      Icons.star,
+                      size: 16,
+                      color: theme.colorScheme.primary,
+                    ),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: Insets.xs),
+              Text(
+                document.operation,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${formatBytes(document.sizeBytes)} · '
+                '${formatRelativeTime(document.createdAt)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

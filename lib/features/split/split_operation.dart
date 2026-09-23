@@ -33,11 +33,18 @@ Future<List<File>> splitDocument({
         pageIndices: range.indices,
         cancel: handle.cancel,
       );
-      outputs.add(await services.store.commit(
+      final saved = await services.store.commit(
         temp,
         desiredName: '${stem}_$range.pdf',
         expectedPages: range.length,
-      ));
+      );
+      await services.library.record(
+        file: saved,
+        operation: 'Split \u00b7 pages $range',
+        toolId: 'split',
+        pageCount: range.length,
+      );
+      outputs.add(saved);
     }
     handle.report(
       completed: ranges.length,
