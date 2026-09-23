@@ -10,6 +10,7 @@ runs locally, there is no account, and the app works in airplane mode.
 | [docs/requirements.md](docs/requirements.md) | Product requirements (v2.1). Features, tiers, privacy, error taxonomy, performance targets. |
 | [docs/feasibility.md](docs/feasibility.md) | Per-feature technical feasibility, library and licensing decisions, effort model, risk register. |
 | [docs/roadmap.md](docs/roadmap.md) | Phased development plan with gates, staffing scenarios and the non-engineering track. |
+| [docs/benchmarks.md](docs/benchmarks.md) | Measured compression behaviour, and the finding that shaped the Compress feature. |
 
 ## Current state
 
@@ -31,13 +32,17 @@ Phase 1 foundation and the first two tools (roadmap.md 5, 7).
   Extract. Multi-select, drag to reorder with edge auto-scroll, one undo stack
   across every kind of edit, and a single save (requirements.md 3.6).
 - Lazily rendered page thumbnails with a bounded LRU cache.
+- **Compress**, built on measured behaviour (docs/benchmarks.md): three
+  presets, an honest pre-flight that never promises a percentage, real
+  before/after numbers, a side-by-side page comparison, and an
+  "already optimized" outcome that costs the user nothing.
 - **Library**: a local SQLite record of everything the app produces, wired into
   every save. Recents on the home screen, a Files screen with search, sort and
   favourites, rename/share/delete, retention, and clear-history in Settings.
 
 **Not yet**
 
-Compress, Images to PDF and PDF to Images are still placeholder screens.
+Images to PDF and PDF to Images are still placeholder screens.
 Folders are not built yet, and there is no full-page viewer (the grid covers
 page-level work; opening a file hands it to the platform).
 

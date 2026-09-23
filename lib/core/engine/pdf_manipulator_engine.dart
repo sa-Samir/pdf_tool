@@ -6,6 +6,7 @@ import 'package:pdf_manipulator/pdf_manipulator.dart' as px;
 
 import '../jobs/cancel_token.dart';
 import '../pages/page_edit_session.dart';
+import 'compression.dart';
 import 'pdf_engine.dart';
 import 'pdf_failure.dart';
 
@@ -239,6 +240,82 @@ class PdfManipulatorEngine implements PdfEngine {
       }
     }
   }
+
+  @override
+  Future<CompressionOutlook> inspectForCompression(
+    File input, {
+    CancelToken? cancel,
+    String? password,
+  }) async {
+    final size = await _sizeOf(input);
+    final editor = await _guard(
+      () => _pdf.edit(FileSource(input), password: password),
+      cancel,
+    );
+    try {
+      final pageCount = await _guard(() => editor.pageCount, cancel);
+      var images = 0;
+      var pagesWithImages = 0;
+      for (var i = 0; i < pageCount; i++) {
+        cancel?.throwIfCancelled();
+        final onPage = await _guard(() => editor.pageImages(i), cancel);
+        if (onPage.isNotEmpty) pagesWithImages++;
+        images += onPage.length;
+      }
+      return CompressionOutlook(
+        sizeBytes: size,
+        pageCount: pageCount,
+        imageCount: images,
+        pagesWithImages: pagesWithImages,
+      );
+    } finally {
+      await editor.dispose();
+    }
+  }
+
+  @override
+  Future<CompressionResult> compress({
+    required File input,
+    required File output,
+    required CompressionLevel level,
+    void Function(int completed, int total)? onStep,
+    CancelToken? cancel,
+    String? password,
+  }) async {
+    final originalBytes = await _sizeOf(input);
+    const totalSteps = 3;
+    onStep?.call(1, totalSteps);
+
+    final editor = await _guard(
+      () => _pdf.edit(FileSource(input), password: password),
+      cancel,
+    );
+    try {
+      cancel?.throwIfCancelled();
+      await _guard(() => editor.reduceImages(_policyFor(level)), cancel);
+      onStep?.call(2, totalSteps);
+
+      cancel?.throwIfCancelled();
+      final sink = await FileSink.create(output);
+      await _guard(() => editor.save(sink), cancel);
+      onStep?.call(totalSteps, totalSteps);
+    } finally {
+      await editor.dispose();
+    }
+
+    return CompressionResult(
+      originalBytes: originalBytes,
+      compressedBytes: await _sizeOf(output),
+    );
+  }
+
+  /// Measured behaviour per level is recorded in docs/benchmarks.md.
+  static px.PdfImagePolicy _policyFor(CompressionLevel level) =>
+      switch (level) {
+        CompressionLevel.light => px.PdfImagePolicy.print,
+        CompressionLevel.balanced => px.PdfImagePolicy.ebook,
+        CompressionLevel.strong => px.PdfImagePolicy.screen,
+      };
 
   @override
   Future<void> dispose() => _pdf.dispose();

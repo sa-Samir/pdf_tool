@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../jobs/cancel_token.dart';
 import '../pages/page_edit_session.dart';
+import 'compression.dart';
 
 /// What we know about a PDF without opening it in the UI.
 @immutable
@@ -67,6 +68,26 @@ abstract interface class PdfEngine {
     required File input,
     required File output,
     required List<PageRef> pages,
+    void Function(int completed, int total)? onStep,
+    CancelToken? cancel,
+    String? password,
+  });
+
+  /// Reads what can be known instantly about how compressible a document is.
+  Future<CompressionOutlook> inspectForCompression(
+    File input, {
+    CancelToken? cancel,
+    String? password,
+  });
+
+  /// Re-encodes embedded raster images and repacks streams.
+  ///
+  /// Text and vector content is never rasterized, so the result stays
+  /// selectable and searchable (requirements.md 3.7).
+  Future<CompressionResult> compress({
+    required File input,
+    required File output,
+    required CompressionLevel level,
     void Function(int completed, int total)? onStep,
     CancelToken? cancel,
     String? password,

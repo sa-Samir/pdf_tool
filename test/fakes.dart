@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:pdf_toolbox/core/engine/compression.dart';
 import 'package:pdf_toolbox/core/engine/pdf_engine.dart';
 import 'package:pdf_toolbox/core/engine/pdf_failure.dart';
 import 'package:pdf_toolbox/core/files/file_importer.dart';
@@ -34,9 +35,13 @@ class FakePdfEngine implements PdfEngine {
   final calls = <String>[];
   var disposed = false;
 
-  static Future<File> writeFake(File file, int pages) async {
+  /// Writes a stand-in document. [padTo] inflates it to a given size so tests
+  /// can express meaningful ratios; the marker stays on the first line.
+  static Future<File> writeFake(File file, int pages, {int padTo = 0}) async {
     await file.parent.create(recursive: true);
-    return file.writeAsString('PAGES:$pages');
+    final marker = 'PAGES:$pages\n';
+    final padding = padTo > marker.length ? padTo - marker.length : 0;
+    return file.writeAsString(marker + ('.' * padding));
   }
 
   @override
@@ -44,7 +49,9 @@ class FakePdfEngine implements PdfEngine {
     calls.add('inspect:${file.path}');
     if (failInspectWith case final failure?) throw failure;
     final text = await file.readAsString();
-    final match = RegExp(r'^PAGES:(\d+)$').firstMatch(text.trim());
+    // The marker is the first line; anything after it is padding.
+    final firstLine = text.split('\n').first.trim();
+    final match = RegExp(r'^PAGES:(\d+)$').firstMatch(firstLine);
     if (match == null) throw const PdfFailure(FailureKind.corruptFile);
     return PdfDocumentInfo(
       pageCount: int.parse(match.group(1)!),
@@ -124,6 +131,58 @@ class FakePdfEngine implements PdfEngine {
     onStep?.call(1, 2);
     await writeFake(output, pages.length);
     onStep?.call(2, 2);
+  }
+
+  /// What [compress] should pretend to achieve, as a fraction of the input.
+  double compressionRatio = 0.25;
+
+  /// Raster images the fake claims to find, driving the outlook.
+  int imageCount = 4;
+
+  @override
+  Future<CompressionOutlook> inspectForCompression(
+    File input, {
+    CancelToken? cancel,
+    String? password,
+  }) async {
+    calls.add('inspectForCompression');
+    final info = await inspect(input);
+    return CompressionOutlook(
+      sizeBytes: info.sizeBytes,
+      pageCount: info.pageCount,
+      imageCount: imageCount,
+      pagesWithImages: imageCount == 0 ? 0 : info.pageCount,
+    );
+  }
+
+  @override
+  Future<CompressionResult> compress({
+    required File input,
+    required File output,
+    required CompressionLevel level,
+    void Function(int completed, int total)? onStep,
+    CancelToken? cancel,
+    String? password,
+  }) async {
+    calls.add('compress:${level.name}');
+    cancel?.throwIfCancelled();
+    await _waitGate(cancel);
+    if (failWith case final failure?) throw failure;
+    cancel?.throwIfCancelled();
+
+    final original = await inspect(input);
+    onStep?.call(1, 2);
+    await writeFake(
+      output,
+      original.pageCount,
+      padTo: (original.sizeBytes * compressionRatio).round(),
+    );
+    onStep?.call(2, 2);
+
+    return CompressionResult(
+      originalBytes: original.sizeBytes,
+      compressedBytes: await output.length(),
+    );
   }
 
   @override
@@ -227,6 +286,34 @@ class MemoryFakeEngine implements PdfEngine {
     required List<PageRef> pages,
     required File input,
     required File output,
+    void Function(int completed, int total)? onStep,
+    CancelToken? cancel,
+    String? password,
+  }) async =>
+      throw UnimplementedError('widget tests do not run operations');
+
+  /// What [inspectForCompression] reports. Widget tests drive the copy from
+  /// this without touching a file.
+  CompressionOutlook outlook = const CompressionOutlook(
+    sizeBytes: 9400000,
+    pageCount: 12,
+    imageCount: 12,
+    pagesWithImages: 12,
+  );
+
+  @override
+  Future<CompressionOutlook> inspectForCompression(
+    File input, {
+    CancelToken? cancel,
+    String? password,
+  }) async =>
+      outlook;
+
+  @override
+  Future<CompressionResult> compress({
+    required File input,
+    required File output,
+    required CompressionLevel level,
     void Function(int completed, int total)? onStep,
     CancelToken? cancel,
     String? password,

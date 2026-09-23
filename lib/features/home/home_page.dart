@@ -5,6 +5,7 @@ import '../../core/library/library_document.dart';
 import '../../core/models/pdf_tool.dart';
 import '../../core/services/app_services.dart';
 import '../../core/theme/app_theme.dart';
+import '../compress/compress_page.dart';
 import '../library/library_page.dart';
 import '../merge/merge_page.dart';
 import '../pages/page_grid_page.dart';
@@ -54,6 +55,7 @@ class _HomePageState extends State<HomePage> {
   static Widget _screenFor(PdfTool tool) => switch (tool.id) {
         'merge' => const MergePage(),
         'split' => const SplitPage(),
+        'compress' => const CompressPage(),
         // Five tools, one screen: the page grid serves them all
         // (requirements.md 3.6).
         'reorder' ||

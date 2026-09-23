@@ -5,6 +5,7 @@ import 'package:pdf_toolbox/app/app.dart';
 import 'package:pdf_toolbox/core/files/document_store.dart';
 import 'package:pdf_toolbox/core/library/library_document.dart';
 import 'package:pdf_toolbox/core/services/app_services.dart';
+import 'package:pdf_toolbox/features/compress/compress_page.dart';
 import 'package:pdf_toolbox/features/merge/merge_page.dart';
 import 'package:pdf_toolbox/features/pages/page_grid_page.dart';
 import 'package:pdf_toolbox/core/catalog/tool_catalog.dart';
@@ -199,10 +200,19 @@ void main() {
       await _pumpHome(tester);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Compress'));
+      await tester.tap(find.text('Images to PDF'));
       await tester.pumpAndSettle();
       expect(find.byType(ToolPlaceholderPage), findsOneWidget);
       expect(find.textContaining('Not built yet'), findsOneWidget);
+    });
+
+    testWidgets('Compress opens the compress screen', (tester) async {
+      await _pumpHome(tester);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Compress'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CompressPage), findsOneWidget);
     });
 
     // One test each: a loop inside a single testWidgets would keep the pushed
