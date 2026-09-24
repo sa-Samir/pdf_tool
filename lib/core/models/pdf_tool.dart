@@ -57,6 +57,22 @@ class PdfTool {
   final Release release;
   final ToolTier tier;
 
+  /// Whether this tool derives a new document rather than editing the one it
+  /// was given (requirements.md 5.2).
+  ///
+  /// The distinction decides what "save" means. Rotating or compressing a
+  /// document produces the same document, changed -- so it can replace what it
+  /// started from. Extracting pages produces a *different* document, and
+  /// writing it over the original would destroy exactly what the user asked to
+  /// pull out of it. Those always save alongside.
+  bool get derivesNewDocument => const {
+        'extract',
+        'split',
+        'merge',
+        'images_to_pdf',
+        'pdf_to_images',
+      }.contains(id);
+
   /// Shown on the card only where a limit applies (requirements.md 3.1).
   final String? tierNote;
 

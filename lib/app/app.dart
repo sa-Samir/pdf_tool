@@ -26,6 +26,9 @@ class _PdfToolboxAppState extends State<PdfToolboxApp> {
     // frame and unawaited, so it never delays launch.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _services.store.sweepWorkspaces();
+      // Requirements.md 5.2: undo history for replaced documents is bounded by
+      // age and count, swept here rather than while the user is working.
+      _services.store.pruneRevisions();
       // Requirements.md 4: entries whose file has gone are pruned at launch.
       _services.library.pruneMissing();
     });

@@ -47,10 +47,16 @@ Phase 1 foundation and the first two tools (roadmap.md 5, 7).
   highlighted hits and next/previous.
 - **Folders**: create, rename, delete and move. Deleting a folder keeps its
   files. Browsing stays in a folder; searching looks everywhere.
-- **Save as a copy or replace the original**, asked before saving in the page
-  editor and Compress. Offered only for documents the app owns, because a
-  picked file is a copy and replacing it would change nothing the user sees.
-  Reachable through Edit pages and Compress in the Files list.
+- **Editing your own document changes your own document.** Open something from
+  Files with Edit pages or Compress and the result takes its place — no prompt,
+  because that is what the screen already said it would do. Only for documents
+  the app owns (a picked file is a copy; replacing it would change nothing the
+  user sees), and only for tools that change a document rather than derive a
+  new one — Extract and the converters always save alongside.
+- **Every replace is reversible.** The previous version is kept before the swap
+  and the result screen offers it back, restoring the content, the library
+  entry, and any free run the operation spent. Revisions are bounded (7 days,
+  20 most recent) and swept at launch.
 - **Free-tier limits**, actually enforced: three lifetime runs per premium
   tool, counted in the database, plus the merge, image-count and DPI caps the
   cards advertise. A run is spent only when a result is kept and it genuinely

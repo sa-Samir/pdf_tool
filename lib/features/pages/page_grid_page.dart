@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import '../../core/engine/pdf_failure.dart';
@@ -11,7 +9,6 @@ import '../../core/pages/thumbnail_cache.dart';
 import '../../core/services/app_services.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/job_views.dart';
-import '../shared/save_choice_sheet.dart';
 import '../shared/result_page.dart';
 import 'page_operation.dart';
 import 'widgets/page_tile.dart';
@@ -37,7 +34,7 @@ class PageGridPage extends StatefulWidget {
 }
 
 class _PageGridPageState extends State<PageGridPage> {
-  final _job = JobController<File>();
+  final _job = JobController<SaveOutcome>();
 
   EditableSource? _source;
   PageEditSession? _session;
@@ -76,7 +73,8 @@ class _PageGridPageState extends State<PageGridPage> {
         MaterialPageRoute<void>(
           builder: (_) => ResultPage(
             title: widget.tool.label,
-            files: [output],
+            files: [output.file],
+            undo: output.undo,
             summary: '${_session!.pageCount} page'
                 '${_session!.pageCount == 1 ? '' : 's'} saved',
           ),
@@ -146,20 +144,10 @@ class _PageGridPageState extends State<PageGridPage> {
     final source = _source!;
     final pages = session.pages;
 
-    // Requirements.md 5.2: replacing is only offered for a document the app
-    // owns, because a picked file is a copy and writing to it would change
-    // nothing the user can see.
-    var target = SaveTarget.newFile;
-    if (source.canReplace) {
-      final chosen = await askSaveTarget(
-        context,
-        documentName: source.displayName,
-        changeSummary: '${pages.length} page'
-            '${pages.length == 1 ? '' : 's'} after your edits.',
-      );
-      if (chosen == null || !mounted) return;
-      target = chosen;
-    }
+    final target = defaultTargetFor(
+      source,
+      derivesNewDocument: widget.tool.derivesNewDocument,
+    );
 
     _job.run((handle) => savePageEdits(
           services: services,

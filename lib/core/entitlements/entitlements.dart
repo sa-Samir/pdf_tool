@@ -41,6 +41,11 @@ abstract interface class Entitlements {
   /// 3.7 and 12).
   Future<void> recordUse(String toolId);
 
+  /// Gives back a use recorded by [recordUse], for an operation the user
+  /// undid. Charging for a result that no longer exists would be theft of a
+  /// free run (requirements.md 9). Never goes below zero.
+  Future<void> refundUse(String toolId);
+
   /// Rebuilds anything showing a count.
   Listenable get changes;
 }

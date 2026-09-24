@@ -7,6 +7,24 @@ import 'package:path_provider/path_provider.dart';
 import '../engine/pdf_engine.dart';
 import '../engine/pdf_failure.dart';
 
+/// How long a replaced document's previous version is kept before the launch
+/// prune removes it, and how many are kept at once. Long enough to change your
+/// mind the next day; bounded so the revisions directory cannot grow without
+/// limit (requirements.md 5.2).
+const kRevisionMaxAge = Duration(days: 7);
+const kRevisionsKept = 20;
+
+/// A document that was replaced in place, and the content it held before.
+class Replacement {
+  const Replacement({required this.file, required this.previous});
+
+  /// The document, now holding the new content. Same path as before.
+  final File file;
+
+  /// What it held before, waiting in the revisions directory.
+  final File previous;
+}
+
 /// A scratch directory for one operation. Everything written here is temporary
 /// and is deleted when the operation ends, however it ends.
 class Workspace {
@@ -54,6 +72,11 @@ class DocumentStore {
   /// Where exported images land. Not the document library: those are PDFs.
   Future<Directory> exports() async => _ensure(await _documentsRoot(), 'exports');
 
+  /// Where the previous version of a replaced document waits, so the replace
+  /// can be undone (requirements.md 5.2).
+  Future<Directory> revisions() async =>
+      _ensure(await _documentsRoot(), 'revisions');
+
   Future<Workspace> openWorkspace() async {
     final root = _ensure(await _tempRoot(), 'workspaces');
     final id = '${DateTime.now().millisecondsSinceEpoch}'
@@ -89,33 +112,82 @@ class DocumentStore {
     int? expectedPages,
   }) async {
     await _verify(temp, expectedPages: expectedPages);
-    final target = await _uniqueTarget(desiredName);
-    try {
-      return await temp.rename(target.path);
-    } on FileSystemException {
-      // Different volume: fall back to copy, then remove the source.
-      final copied = await temp.copy(target.path);
-      await _deleteQuietly(temp);
-      return copied;
-    }
+    return _moveInto(temp, await _uniqueTarget(desiredName));
   }
 
-  /// Puts [temp] in [target]'s place (requirements.md 5.2).
+  /// Puts [temp] in [target]'s place, keeping what was there
+  /// (requirements.md 5.2).
   ///
-  /// Verified first, then swapped atomically, so an interrupted replace leaves
-  /// the original intact rather than a half-written file where the user's
-  /// document used to be. Only ever called on a file the app owns, and only
-  /// when the user asked for it.
-  Future<File> replace(
+  /// Verified first, then swapped, so an interrupted replace leaves the
+  /// original intact rather than a half-written file where the user's document
+  /// used to be. The previous version is kept in [revisions] and returned, so
+  /// replacing is reversible rather than final. Only ever called on a file the
+  /// app owns.
+  Future<Replacement> replace(
     File temp, {
     required File target,
     int? expectedPages,
   }) async {
     await _verify(temp, expectedPages: expectedPages);
+
+    // Copied rather than moved. Moving would leave the document missing from
+    // its own path for as long as the swap takes, and a crash inside that
+    // window would leave a library entry pointing at nothing -- which the
+    // launch prune would then delete. One extra pass over the file buys
+    // "the original survives any failure" by construction.
+    final backup = await _unique(await revisions(), p.basename(target.path));
+    await target.copy(backup.path);
+
+    try {
+      return Replacement(
+        file: await _moveInto(temp, target),
+        previous: backup,
+      );
+    } catch (_) {
+      await _deleteQuietly(backup);
+      rethrow;
+    }
+  }
+
+  /// Puts the previous version of a replaced document back.
+  ///
+  /// Deliberately not verified. [_verify] guards output this app just produced;
+  /// a revision is content that was already in the library, and refusing to
+  /// restore it would strand the user with the version they asked to undo.
+  /// One-shot: the revision is consumed, so a second undo has nothing to do.
+  Future<File> restore(Replacement replacement) =>
+      _moveInto(replacement.previous, replacement.file);
+
+  /// Drops revisions older than [maxAge], then keeps only the newest [keep]
+  /// (requirements.md 5.2). Called at launch, never during an operation.
+  Future<void> pruneRevisions({
+    Duration maxAge = kRevisionMaxAge,
+    int keep = kRevisionsKept,
+  }) async {
+    final dir = await revisions();
+    final dated = <({DateTime at, File file})>[];
+    await for (final entity in dir.list()) {
+      if (entity is! File) continue;
+      try {
+        dated.add((at: await entity.lastModified(), file: entity));
+      } on FileSystemException {
+        // Vanished between listing and stat; nothing left to prune.
+      }
+    }
+    final cutoff = DateTime.now().subtract(maxAge);
+    dated.sort((a, b) => b.at.compareTo(a.at)); // newest first
+    for (var i = 0; i < dated.length; i++) {
+      if (i >= keep || dated[i].at.isBefore(cutoff)) {
+        await _deleteQuietly(dated[i].file);
+      }
+    }
+  }
+
+  /// Moves [temp] onto [target], falling back to a copy across volumes.
+  static Future<File> _moveInto(File temp, File target) async {
     try {
       return await temp.rename(target.path);
     } on FileSystemException {
-      // Different volume: copy over it, then drop the temp.
       final copied = await temp.copy(target.path);
       await _deleteQuietly(temp);
       return copied;

@@ -9,7 +9,6 @@ import '../../core/theme/app_theme.dart';
 import '../../core/entitlements/entitlements.dart';
 import '../shared/job_views.dart';
 import '../shared/result_page.dart';
-import '../shared/save_choice_sheet.dart';
 import '../shared/upgrade_notice.dart';
 import 'compress_operation.dart';
 import 'widgets/compare_preview.dart';
@@ -137,18 +136,9 @@ class _CompressPageState extends State<CompressPage> {
   Future<void> _keep(CompressionOutcome outcome) async {
     final services = AppServicesScope.of(context);
 
-    // Only a document the app owns can be replaced (requirements.md 5.2).
-    var target = SaveTarget.newFile;
-    if (outcome.source.canReplace) {
-      final chosen = await askSaveTarget(
-        context,
-        documentName: outcome.source.displayName,
-        changeSummary: '${formatBytes(outcome.result.originalBytes)} to '
-            '${formatBytes(outcome.result.compressedBytes)}.',
-      );
-      if (chosen == null || !mounted) return;
-      target = chosen;
-    }
+    // Compressing a document you own produces that same document, smaller, so
+    // it takes its own place -- never a derivation.
+    final target = defaultTargetFor(outcome.source);
 
     setState(() => _saving = true);
     final navigator = Navigator.of(context);
@@ -161,7 +151,8 @@ class _CompressPageState extends State<CompressPage> {
       MaterialPageRoute<void>(
         builder: (_) => ResultPage(
           title: 'Compressed',
-          files: [saved],
+          files: [saved.file],
+          undo: saved.undo,
           summary: '${formatBytes(outcome.result.originalBytes)} → '
               '${formatBytes(outcome.result.compressedBytes)} · '
               'saved ${outcome.result.savedPercent}%',

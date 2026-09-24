@@ -37,6 +37,7 @@ Gaps found when auditing v2 against its own change log, plus the items the revie
 | 20 | **Notifications defined, not just "notification settings"** (§11) | v2 listed a settings toggle for an unspecified feature. Scope is now: completion notices and subscription lifecycle only — no engagement pushes. |
 | 21 | **Optional biometric app lock** (§8.2, §11) | A privacy-positioned document app that cannot lock its own library is leaving the claim half-built; also covers the app-switcher snapshot. |
 | 22 | **Assumptions, open questions and explicit non-goals** (§20) | Six decisions are currently unmade, one of which (is there a UA budget?) should gate the build itself. Non-goals are written down so they are not re-litigated mid-build. |
+| 23 | **Replacing a document made reversible instead of confirmed** (§5.2.1b–1c) | The first cut asked "new file or replace?" on every save. That taxes the most deliberate user — someone who opened their own document on purpose — every single time, and the prompt had to warn that the old version was "gone for good", which was only true because nothing kept it. Keeping the previous version removes both problems: the common case loses a step, and the destructive case stops being destructive. |
 
 ---
 
@@ -290,11 +291,14 @@ Create, rename, move, delete, favorite, share. Sort by name / date / size. Searc
 ### 5.2 Data integrity invariants (non-negotiable)
 
 1. Output is written to a temp path, verified as a parseable PDF with the expected page count, then atomically moved into place. **A file outside the app is never written to at all**: picked files are copied into the sandbox (§3.3) and the copy is what tools operate on.
-1b. A document the app owns may be **replaced in place, but only on an explicit choice**, offered as "Save as a new file" (the default) or "Replace". The replace runs through the same temp → verify → atomic swap, so an interrupted replace leaves the original intact rather than a half-written file. Replacing is offered only where it is meaningful and honest: the page editor and Compress, on a document opened from the library. It is never offered for an imported copy, where it would overwrite our copy and leave the user's own file untouched.
+1b. A document the app owns is **replaced in place, without being asked**, when a tool changes that same document: the page editor and Compress, on a document opened from the library. Editing your own document is what the screen already said it would do, so there is nothing to confirm. Two conditions gate it, both necessary:
+    - the app must own the document — never an imported copy, where a write would overwrite our copy and leave the user's own file untouched;
+    - the tool must be changing that document rather than deriving a new one. Extract, Split, Merge and the converters always save alongside: writing the result over the original would destroy exactly what the user asked to pull out of it.
+1c. **A replace is always reversible.** Before the swap, the previous version is copied into a revisions directory; the result screen then offers to put it back, restoring four things — the content, the library entry's description, its page count, and any free run the operation spent. Copied rather than moved: a move would leave the document absent from its own path for the duration of the swap, and a crash inside that window would leave a library entry pointing at nothing. Revisions are bounded (7 days, 20 most recent) and swept at launch, never during an operation. An undo is one-shot: it consumes the revision.
 2. A failed or cancelled operation leaves no partial output and no orphaned temp files.
 3. Before starting, check free space for at least 2.5× the input size and fail fast with a clear message if unavailable.
 4. Temp files are cleaned on operation completion, on app launch (sweeping anything left by a crash), and on a size ceiling.
-5. Saving never silently overwrites: name collisions prompt, or auto-suffix.
+5. Saving never silently overwrites: name collisions auto-suffix. The in-place replace of §5.2.1b is not an exception — it is announced on the result screen and reversible per §5.2.1c.
 6. The app never deletes a user's original file. Deletion is always an explicit user action on a file the app owns.
 
 ## 6. Sharing and export

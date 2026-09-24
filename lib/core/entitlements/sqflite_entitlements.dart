@@ -65,6 +65,19 @@ class SqfliteEntitlements implements Entitlements {
     );
     _notifier.ping();
   }
+
+  @override
+  Future<void> refundUse(String toolId) async {
+    if (_isPremium) return;
+    final db = await _db;
+    // MAX guards the floor inside the statement, so a refund that races
+    // another cannot drive the count negative.
+    await db.rawUpdate(
+      'UPDATE $table SET used = MAX(used - 1, 0) WHERE tool_id = ?',
+      [toolId],
+    );
+    _notifier.ping();
+  }
 }
 
 /// A ChangeNotifier that can be pinged from outside it.

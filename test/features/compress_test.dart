@@ -122,7 +122,7 @@ void main() {
       expect(await library.list(), isEmpty);
 
       final saved = await outcome.keep(services);
-      expect(saved.existsSync(), isTrue);
+      expect(saved.file.existsSync(), isTrue);
       expect(savedNames(), ['scan (compressed).pdf']);
     });
 

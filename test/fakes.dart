@@ -760,6 +760,13 @@ class FakeEntitlements implements Entitlements {
     _used[toolId] = (_used[toolId] ?? 0) + 1;
     _notifier.ping();
   }
+
+  @override
+  Future<void> refundUse(String toolId) async {
+    if (isPremium) return;
+    _used[toolId] = ((_used[toolId] ?? 0) - 1).clamp(0, 1 << 30);
+    _notifier.ping();
+  }
 }
 
 class _TestNotifier extends ChangeNotifier {

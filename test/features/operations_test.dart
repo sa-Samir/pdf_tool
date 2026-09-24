@@ -249,7 +249,7 @@ void main() {
   group('page edits', () {
     test('saves the edited page list as one document', () async {
       final source = await input('doc.pdf', 5);
-      final job = JobController<File>();
+      final job = JobController<SaveOutcome>();
 
       await job.run((handle) => savePageEdits(
             services: services,
@@ -266,13 +266,13 @@ void main() {
           ));
 
       expect(job.status, JobStatus.success);
-      expect((await engine.inspect(job.result!)).pageCount, 3);
+      expect((await engine.inspect(job.result!.file)).pageCount, 3);
       expect(library(), ['doc (edited).pdf']);
     });
 
     test('names an extract differently from an edit', () async {
       final source = await input('doc.pdf', 3);
-      final job = JobController<File>();
+      final job = JobController<SaveOutcome>();
 
       await job.run((handle) => savePageEdits(
             services: services,
@@ -293,7 +293,7 @@ void main() {
       final source = await input('doc.pdf', 4);
       final before = await source.readAsString();
       engine.failWith = const PdfFailure(FailureKind.corruptFile);
-      final job = JobController<File>();
+      final job = JobController<SaveOutcome>();
 
       await job.run((handle) => savePageEdits(
             services: services,
@@ -313,7 +313,7 @@ void main() {
     test('cancelling saves nothing and cleans up', () async {
       final source = await input('doc.pdf', 4);
       engine.gate = Completer<void>();
-      final job = JobController<File>();
+      final job = JobController<SaveOutcome>();
 
       final running = job.run((handle) => savePageEdits(
             services: services,
@@ -340,7 +340,7 @@ void main() {
 
     test('a page count that does not match is caught before saving', () async {
       final source = await input('doc.pdf', 4);
-      final job = JobController<File>();
+      final job = JobController<SaveOutcome>();
 
       // The fake writes one page per entry; commit checks that against the
       // expected count, so a mismatch here would mean a corrupted save.
@@ -359,7 +359,7 @@ void main() {
           ));
 
       expect(job.status, JobStatus.success);
-      expect((await engine.inspect(job.result!)).pageCount, 3);
+      expect((await engine.inspect(job.result!.file)).pageCount, 3);
     });
   });
 

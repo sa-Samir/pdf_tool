@@ -35,7 +35,7 @@ class CompressionOutcome {
   var _settled = false;
 
   /// Commits the result, records it in the library, and spends one free run.
-  Future<File> keep(
+  Future<SaveOutcome> keep(
     AppServices services, {
     SaveTarget target = SaveTarget.newFile,
   }) async {
@@ -44,29 +44,44 @@ class CompressionOutcome {
     try {
       final operation = 'Compressed · saved ${result.savedPercent}%';
       final document = source.document;
-      final File saved;
+      // A result that did not shrink costs nothing (requirements.md 3.7).
+      final charged = !result.isNoOp;
+      final SaveOutcome outcome;
 
       if (target == SaveTarget.replaceOriginal && document != null) {
-        saved = await services.store.replace(file, target: source.file);
+        final replacement =
+            await services.store.replace(file, target: source.file);
         await services.library
             .refreshAfterReplace(document.id, operation: operation);
+        outcome = SaveOutcome(
+          file: replacement.file,
+          undo: ReplacedVersion(
+            replacement: replacement,
+            documentId: document.id,
+            documentName: document.name,
+            // Captured before the refresh above overwrote them.
+            previousOperation: document.operation,
+            previousPageCount: document.pageCount,
+            // Undoing this gives the run back: the user ends up with the
+            // document they started with, so they were charged for nothing.
+            refundToolId: charged ? 'compress' : null,
+          ),
+        );
       } else {
         final name =
             '${p.basenameWithoutExtension(source.file.path)} (compressed).pdf';
-        saved = await services.store.commit(file, desiredName: name);
+        final saved = await services.store.commit(file, desiredName: name);
         await services.library.record(
           file: saved,
           operation: operation,
           toolId: 'compress',
         );
+        outcome = SaveOutcome(file: saved);
       }
       // Spent here rather than in the UI, because this is the one place that
-      // means "the user kept it". A result that did not shrink costs nothing
-      // (requirements.md 3.7).
-      if (!result.isNoOp) {
-        await services.entitlements.recordUse('compress');
-      }
-      return saved;
+      // means "the user kept it".
+      if (charged) await services.entitlements.recordUse('compress');
+      return outcome;
     } finally {
       await _workspace.dispose();
     }
