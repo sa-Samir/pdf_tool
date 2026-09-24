@@ -71,6 +71,13 @@ Phase 1 foundation and the first two tools (roadmap.md 5, 7).
   whole 200 MB document in memory and breach the memory cap in requirements
   §13; both sides stream from a path instead, and neither asks for a storage
   permission.
+- **Print**: from the viewer's app bar or a document's menu in Files. The file
+  is streamed to the platform print system rather than re-rendered — Android
+  writes into the print framework's descriptor, iOS takes a file URL — so a
+  large document costs no memory. The real page count is passed on so the
+  preview is not guessing. Handing off shows no message: the system print UI
+  is still open, and claiming "sent to the printer" would assert an outcome
+  the app cannot see.
 - **Library**: a local SQLite record of everything the app produces, wired into
   every save. Recents on the home screen, a Files screen with search, sort and
   favourites, rename/share/delete, retention, and clear-history in Settings.

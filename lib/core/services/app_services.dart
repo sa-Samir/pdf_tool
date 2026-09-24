@@ -11,6 +11,7 @@ import '../entitlements/sqflite_entitlements.dart';
 import '../engine/pdf_manipulator_engine.dart';
 import '../files/document_store.dart';
 import '../files/device_exporter.dart';
+import '../files/document_printer.dart';
 import '../files/export_service.dart';
 import '../files/file_importer.dart';
 import '../images/gallery_saver.dart';
@@ -30,6 +31,7 @@ class AppServices {
     required this.importer,
     required this.export,
     required this.deviceExport,
+    required this.printer,
     required this.library,
     required this.images,
     required this.gallery,
@@ -43,6 +45,7 @@ class AppServices {
     LibraryRepository? library,
     ExportService export = const ExportService(),
     DeviceExporter deviceExport = const PlatformDeviceExporter(),
+    DocumentPrinter printer = const PlatformDocumentPrinter(),
     ImageNormalizer images = const PlatformImageNormalizer(),
     GallerySaver gallery = const PlatformGallerySaver(),
     Entitlements? entitlements,
@@ -60,6 +63,7 @@ class AppServices {
       importer: importer ?? SystemFileImporter(store: resolvedStore),
       export: export,
       deviceExport: deviceExport,
+      printer: printer,
       images: images,
       gallery: gallery,
       entitlements:
@@ -86,6 +90,9 @@ class AppServices {
   /// Copies documents out of the sandbox, so what the app produces survives an
   /// uninstall (requirements.md 6).
   final DeviceExporter deviceExport;
+
+  /// Sends a document to the platform print system (requirements.md 6).
+  final DocumentPrinter printer;
   final FileImporter importer;
   final LibraryRepository library;
   final ImageNormalizer images;

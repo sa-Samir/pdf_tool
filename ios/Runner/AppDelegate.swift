@@ -6,6 +6,7 @@ import UIKit
   /// Held for the app's lifetime: the document picker's delegate must outlive
   /// the call that presents it.
   private var deviceExport: DeviceExportHandler?
+  private var documentPrint: DocumentPrintHandler?
 
   override func application(
     _ application: UIApplication,
@@ -22,6 +23,15 @@ import UIKit
         binaryMessenger: controller.binaryMessenger
       ).setMethodCallHandler { call, result in
         handler.handle(call, result: result)
+      }
+
+      let printer = DocumentPrintHandler(presenter: controller)
+      documentPrint = printer
+      FlutterMethodChannel(
+        name: "com.samir.pdf_toolbox/print",
+        binaryMessenger: controller.binaryMessenger
+      ).setMethodCallHandler { call, result in
+        printer.handle(call, result: result)
       }
     }
 

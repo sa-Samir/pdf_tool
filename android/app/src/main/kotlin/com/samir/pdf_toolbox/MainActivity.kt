@@ -1,8 +1,19 @@
 package com.samir.pdf_toolbox
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
+import android.os.CancellationSignal
+import android.os.Handler
+import android.os.Looper
+import android.os.ParcelFileDescriptor
+import android.print.PageRange
+import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
+import android.print.PrintManager
 import android.provider.DocumentsContract
 import android.webkit.MimeTypeMap
 import io.flutter.embedding.android.FlutterActivity
@@ -10,6 +21,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.io.FileOutputStream
 
 /**
  * Copies finished documents out to wherever the user picks (requirements.md 6).
@@ -32,6 +44,8 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler(::onMethodCall)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PRINT_CHANNEL)
+            .setMethodCallHandler(::onPrintCall)
     }
 
     private fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -81,6 +95,46 @@ class MainActivity : FlutterActivity() {
             }
         } catch (e: Exception) {
             settle(reply("failed", 0))
+        }
+    }
+
+    /**
+     * Hands a PDF to the system print UI (requirements.md 6).
+     *
+     * The file is streamed into the descriptor the print framework supplies,
+     * so a large document is never held in memory. Reports only that the
+     * system took it: what the user then does in that UI -- print, save as
+     * PDF, or back out -- is theirs, and this app does not claim to know.
+     */
+    private fun onPrintCall(call: MethodCall, result: MethodChannel.Result) {
+        if (call.method != "print") {
+            result.notImplemented()
+            return
+        }
+        val path = call.argument<String>("path")
+        if (path.isNullOrEmpty()) {
+            result.success(mapOf("status" to "failed"))
+            return
+        }
+        val source = File(path)
+        if (!source.exists()) {
+            result.success(mapOf("status" to "failed"))
+            return
+        }
+
+        val manager = getSystemService(Context.PRINT_SERVICE) as? PrintManager
+        if (manager == null) {
+            result.success(mapOf("status" to "unsupported"))
+            return
+        }
+
+        val jobName = call.argument<String>("jobName") ?: source.name
+        val pageCount = call.argument<Int>("pageCount") ?: 0
+        try {
+            manager.print(jobName, PdfFileAdapter(source, pageCount), null)
+            result.success(mapOf("status" to "started"))
+        } catch (e: Exception) {
+            result.success(mapOf("status" to "failed"))
         }
     }
 
@@ -176,8 +230,76 @@ class MainActivity : FlutterActivity() {
         pendingPaths = emptyList()
     }
 
+    /**
+     * Feeds an existing PDF to the print framework without re-rendering it.
+     *
+     * Always writes the whole document and reports ALL_PAGES, which is the
+     * truth: page-range selection is then the spooler's job, not ours. We do
+     * not re-encode, so the printed file is the file.
+     */
+    private class PdfFileAdapter(
+        private val source: File,
+        private val pageCount: Int,
+    ) : PrintDocumentAdapter() {
+
+        private val main = Handler(Looper.getMainLooper())
+
+        override fun onLayout(
+            oldAttributes: PrintAttributes?,
+            newAttributes: PrintAttributes?,
+            cancellationSignal: CancellationSignal?,
+            callback: LayoutResultCallback,
+            extras: Bundle?,
+        ) {
+            if (cancellationSignal?.isCanceled == true) {
+                callback.onLayoutCancelled()
+                return
+            }
+            val info = PrintDocumentInfo.Builder(source.name)
+                .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                .setPageCount(
+                    if (pageCount > 0) pageCount
+                    else PrintDocumentInfo.PAGE_COUNT_UNKNOWN
+                )
+                .build()
+            callback.onLayoutFinished(info, true)
+        }
+
+        override fun onWrite(
+            pages: Array<out PageRange>?,
+            destination: ParcelFileDescriptor,
+            cancellationSignal: CancellationSignal?,
+            callback: WriteResultCallback,
+        ) {
+            // Off the main thread: the print framework calls this on it, and a
+            // 200 MB document would otherwise freeze the UI (requirements.md 13).
+            Thread {
+                val error = try {
+                    source.inputStream().use { input ->
+                        FileOutputStream(destination.fileDescriptor).use { out ->
+                            input.copyTo(out)
+                        }
+                    }
+                    null
+                } catch (e: Exception) {
+                    e.message ?: "could not write the document"
+                }
+                main.post {
+                    if (cancellationSignal?.isCanceled == true) {
+                        callback.onWriteCancelled()
+                    } else if (error == null) {
+                        callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+                    } else {
+                        callback.onWriteFailed(error)
+                    }
+                }
+            }.start()
+        }
+    }
+
     private companion object {
         const val CHANNEL = "com.samir.pdf_toolbox/device_export"
+        const val PRINT_CHANNEL = "com.samir.pdf_toolbox/print"
         const val REQUEST_CREATE = 0x5AF1
         const val REQUEST_TREE = 0x5AF2
 

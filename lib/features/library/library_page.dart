@@ -8,6 +8,7 @@ import '../../core/files/save_target.dart';
 import '../../core/services/app_services.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/job_views.dart';
+import '../shared/print_document.dart';
 import '../shared/save_to_device.dart';
 import '../compress/compress_page.dart';
 import '../pages/page_grid_page.dart';
@@ -112,6 +113,18 @@ class _LibraryPageState extends State<LibraryPage> {
   void _toggleSelected(LibraryDocument document) => setState(() {
         if (!_selected.remove(document.id)) _selected.add(document.id);
       });
+
+  /// Sends one document to the system print UI (requirements.md 6).
+  Future<void> _print(LibraryDocument document) async {
+    final services = AppServicesScope.of(context);
+    final file = await services.library.fileFor(document);
+    if (!mounted) return;
+    if (file == null) {
+      _reportMissing();
+      return;
+    }
+    await printDocument(context, file, pageCount: document.pageCount);
+  }
 
   Future<void> _share(LibraryDocument document) async {
     final services = AppServicesScope.of(context);
@@ -452,6 +465,7 @@ class _LibraryPageState extends State<LibraryPage> {
                               onToggleSelected: () =>
                                   _toggleSelected(document),
                               onSaveToDevice: () => _saveToDevice(document),
+                              onPrint: () => _print(document),
                               onOpen: () => _open(document),
                               onShare: () => _share(document),
                               onRename: () => _rename(document),
@@ -498,6 +512,7 @@ class _DocumentTile extends StatelessWidget {
     required this.selected,
     required this.onToggleSelected,
     required this.onSaveToDevice,
+    required this.onPrint,
     required this.onOpen,
     required this.onShare,
     required this.onRename,
@@ -516,6 +531,7 @@ class _DocumentTile extends StatelessWidget {
   final bool selected;
   final VoidCallback onToggleSelected;
   final VoidCallback onSaveToDevice;
+  final VoidCallback onPrint;
   final VoidCallback onOpen;
   final VoidCallback onShare;
   final VoidCallback onRename;
@@ -584,6 +600,7 @@ class _DocumentTile extends StatelessWidget {
                       'pages' => onEditPages(),
                       'compress' => onCompress(),
                       'save' => onSaveToDevice(),
+                      'print' => onPrint(),
                       'share' => onShare(),
                       'rename' => onRename(),
                       'move' => onMove(),
@@ -596,6 +613,7 @@ class _DocumentTile extends StatelessWidget {
                       PopupMenuDivider(),
                       PopupMenuItem(
                           value: 'save', child: Text('Save to device')),
+                      PopupMenuItem(value: 'print', child: Text('Print')),
                       PopupMenuItem(value: 'share', child: Text('Share')),
                       PopupMenuItem(value: 'rename', child: Text('Rename')),
                       PopupMenuItem(value: 'move', child: Text('Move to folder')),

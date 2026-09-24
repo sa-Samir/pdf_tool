@@ -126,6 +126,7 @@ class _CompressPageState extends State<CompressPage> {
     final source = _source!;
     final level = _level;
     _job.run((handle) => compressDocument(
+          pageCount: _outlook?.pageCount,
           services: services,
           source: source,
           level: level,

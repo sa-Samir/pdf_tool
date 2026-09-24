@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/services/app_services.dart';
+import '../shared/print_document.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/job_views.dart';
 import 'viewer_controller.dart';
@@ -135,6 +136,17 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                   controller!.clearSearch();
                 }
               },
+            ),
+            IconButton(
+              icon: const Icon(Icons.print_outlined),
+              tooltip: 'Print',
+              // The page count is already known here, so the print preview
+              // can show the real number rather than "unknown".
+              onPressed: () => printDocument(
+                context,
+                widget.file,
+                pageCount: controller!.pageCount,
+              ),
             ),
             IconButton(
               icon: const Icon(Icons.share_outlined),

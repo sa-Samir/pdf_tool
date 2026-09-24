@@ -21,6 +21,7 @@ class CompressionOutcome {
     required this.result,
     required this.level,
     required Workspace workspace,
+    this.pageCount,
   }) : _workspace = workspace;
 
   final EditableSource source;
@@ -30,6 +31,11 @@ class CompressionOutcome {
 
   final CompressionResult result;
   final CompressionLevel level;
+
+  /// Carried through from the pre-flight inspection so the library entry
+  /// states it. Compression does not change the page count, so the number the
+  /// outlook already found is the number the result has.
+  final int? pageCount;
   final Workspace _workspace;
 
   var _settled = false;
@@ -75,6 +81,7 @@ class CompressionOutcome {
           file: saved,
           operation: operation,
           toolId: 'compress',
+          pageCount: pageCount,
         );
         outcome = SaveOutcome(file: saved);
       }
@@ -101,6 +108,7 @@ Future<CompressionOutcome> compressDocument({
   required EditableSource source,
   required CompressionLevel level,
   required JobHandle handle,
+  int? pageCount,
 }) async {
   final workspace = await services.store.openWorkspace();
   try {
@@ -127,6 +135,7 @@ Future<CompressionOutcome> compressDocument({
       result: result,
       level: level,
       workspace: workspace,
+      pageCount: pageCount,
     );
   } catch (_) {
     // Only on the failure path: a successful outcome owns its workspace until

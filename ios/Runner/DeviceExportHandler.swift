@@ -78,3 +78,63 @@ final class DeviceExportHandler: NSObject, UIDocumentPickerDelegate {
     ["status": status, "count": count, "location": location]
   }
 }
+
+/// Hands a PDF to the system print UI (requirements.md 6).
+///
+/// `printingItem` takes a file URL, so the document is never loaded into
+/// memory -- the same reason the exporter avoids byte-based APIs
+/// (requirements.md 13).
+final class DocumentPrintHandler: NSObject {
+
+  private weak var presenter: UIViewController?
+
+  init(presenter: UIViewController) {
+    self.presenter = presenter
+  }
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard call.method == "print" else {
+      result(FlutterMethodNotImplemented)
+      return
+    }
+    guard UIPrintInteractionController.isPrintingAvailable else {
+      result(["status": "unsupported"])
+      return
+    }
+    guard
+      let arguments = call.arguments as? [String: Any],
+      let path = arguments["path"] as? String
+    else {
+      result(["status": "failed"])
+      return
+    }
+
+    let url = URL(fileURLWithPath: path)
+    guard UIPrintInteractionController.canPrint(url) else {
+      result(["status": "failed"])
+      return
+    }
+
+    let info = UIPrintInfo.printInfo()
+    info.outputType = .general
+    info.jobName = (arguments["jobName"] as? String) ?? url.lastPathComponent
+
+    let controller = UIPrintInteractionController.shared
+    controller.printInfo = info
+    controller.printingItem = url
+
+    // On iPad the print sheet is a popover and needs somewhere to come from,
+    // or it simply does not appear.
+    if UIDevice.current.userInterfaceIdiom == .pad, let view = presenter?.view {
+      let anchor = CGRect(x: view.bounds.midX, y: view.bounds.midY,
+                          width: 0, height: 0)
+      controller.present(from: anchor, in: view, animated: true) { _, _, _ in }
+    } else {
+      controller.present(animated: true) { _, _, _ in }
+    }
+
+    // Reported once the system UI has the document. Whether the user prints
+    // it, saves it as a PDF or backs out is between them and that UI.
+    result(["status": "started"])
+  }
+}

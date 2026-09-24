@@ -67,6 +67,7 @@ void main() {
   Future<CompressionOutcome> run({
     CompressionLevel level = CompressionLevel.balanced,
     String name = 'scan.pdf',
+    int? pageCount,
   }) async {
     final job = JobController<CompressionOutcome>();
     await job.run((handle) async => compressDocument(
@@ -77,6 +78,7 @@ void main() {
           ),
           level: level,
           handle: handle,
+          pageCount: pageCount,
         ));
     expect(job.status, JobStatus.success, reason: '${job.failure}');
     return job.result!;
@@ -124,6 +126,16 @@ void main() {
       final saved = await outcome.keep(services);
       expect(saved.file.existsSync(), isTrue);
       expect(savedNames(), ['scan (compressed).pdf']);
+    });
+
+    test('the library entry states the page count, as every other tool does',
+        () async {
+      final outcome = await run(pageCount: 9);
+      await outcome.keep(services);
+
+      // Without this the entry reads "Compressed - 102 KB" with no page
+      // count, and a print preview has to work the number out for itself.
+      expect((await library.list()).single.pageCount, 9);
     });
 
     test('keeping records the saving in the library', () async {

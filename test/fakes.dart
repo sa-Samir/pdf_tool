@@ -8,6 +8,7 @@ import 'package:pdf_toolbox/core/entitlements/entitlements.dart';
 import 'package:pdf_toolbox/core/engine/pdf_failure.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdf_toolbox/core/files/device_exporter.dart';
+import 'package:pdf_toolbox/core/files/document_printer.dart';
 import 'package:pdf_toolbox/core/files/document_store.dart' show sanitizeFileName;
 import 'package:pdf_toolbox/core/files/file_importer.dart';
 import 'package:pdf_toolbox/core/images/gallery_saver.dart';
@@ -812,6 +813,28 @@ class FakeDeviceExporter implements DeviceExporter {
     calls.add([for (final f in files) f.path]);
     return result ??
         DeviceSaveResult(DeviceSaveStatus.saved, savedCount: files.length);
+  }
+}
+
+/// Records what was sent to print, and answers however a test needs.
+class FakeDocumentPrinter implements DocumentPrinter {
+  FakeDocumentPrinter({this.outcome = PrintOutcome.started, this.isSupported = true});
+
+  PrintOutcome outcome;
+
+  @override
+  final bool isSupported;
+
+  final jobs = <({String path, String? jobName, int? pageCount})>[];
+
+  @override
+  Future<PrintOutcome> printDocument(
+    File file, {
+    String? jobName,
+    int? pageCount,
+  }) async {
+    jobs.add((path: file.path, jobName: jobName, pageCount: pageCount));
+    return outcome;
   }
 }
 

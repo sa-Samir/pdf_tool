@@ -39,6 +39,7 @@ Gaps found when auditing v2 against its own change log, plus the items the revie
 | 22 | **Assumptions, open questions and explicit non-goals** (§20) | Six decisions are currently unmade, one of which (is there a UA budget?) should gate the build itself. Non-goals are written down so they are not re-litigated mid-build. |
 | 23 | **Replacing a document made reversible instead of confirmed** (§5.2.1b–1c) | The first cut asked "new file or replace?" on every save. That taxes the most deliberate user — someone who opened their own document on purpose — every single time, and the prompt had to warn that the old version was "gone for good", which was only true because nothing kept it. Keeping the previous version removes both problems: the common case loses a step, and the destructive case stops being destructive. |
 | 24 | **Save to device built, and the reason for it written down** (§6.1) | §6 always listed "a user-chosen location via the system picker" and it was never built, leaving the share sheet as the only way out of the sandbox. That matters more than a missing menu item: app-private storage is deleted on uninstall, so the library silently doubled as a place to lose work. |
+| 25 | **Print built on the platform print systems, not a package** (§6.2) | The last of §6's actions. `printing` would have added a dependency whose layout callback takes the whole document as bytes — the same §13 breach as `file_picker.saveFile()`. Android's PrintDocumentAdapter and iOS's UIPrintInteractionController both take a descriptor or a URL, so neither needs the bytes. |
 
 ---
 
@@ -317,6 +318,17 @@ Everything the app produces lives in **app-private storage**, which the platform
 5. **Honest reporting.** A partial save ("Saved 2 of 3 files") is never rounded up to success, a destination the platform does not name is omitted rather than invented, and cancelling the picker is reported as nothing at all, because it is a choice rather than an event.
 
 Acceptance: a document saved out is byte-identical to the one in the library and both still exist; a 200 MB document exports without exceeding the §13 memory cap; cancelling leaves no message and no file; selecting N documents produces exactly N files in one chosen folder.
+
+### 6.2 Print (built)
+
+Reachable from the viewer's app bar and from a document's menu in Files.
+
+1. **The file is the job.** Neither platform re-renders or re-encodes the PDF: Android streams it into the descriptor the print framework supplies, iOS hands `UIPrintInteractionController` a file URL. Nothing is held in memory, for the same reason as §6.1.3 — the `printing` package's layout callback wants the whole document as bytes.
+2. **The real page count is passed on** wherever it is already known (the viewer has it, the library stores it), so the print preview shows a number rather than "unknown".
+3. **Page ranges belong to the spooler.** The Android adapter always writes the whole document and reports `ALL_PAGES`, which is the truth about what it wrote; selecting a subset is then the print framework's job, not a second export path of ours.
+4. **No outcome is claimed.** Handing off to the system print UI produces no message, because that UI is still open and the user may yet print, save as PDF, or back out. Only "cannot print" and "printing unavailable" are reported.
+
+Acceptance: printing a 200 MB document does not exceed the §13 memory cap; the preview shows the document's real page count; handing off shows no message; a device with no print services says so rather than failing silently.
 
 ## 7. Offline
 
