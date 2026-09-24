@@ -15,12 +15,14 @@ void main() {
   late Directory root;
   late FakePdfEngine engine;
   late FakeLibraryRepository library;
+  late FakeEntitlements entitlements;
   late AppServices services;
 
   setUp(() async {
     root = await Directory.systemTemp.createTemp('compress_test');
     engine = FakePdfEngine();
     library = FakeLibraryRepository();
+    entitlements = FakeEntitlements();
     services = AppServices(
       engine: engine,
       store: DocumentStore(
@@ -31,6 +33,7 @@ void main() {
       importer: FakeFileImporter([]),
       library: library,
       gallery: FakeGallerySaver(),
+      entitlements: entitlements,
     );
   });
 
@@ -253,6 +256,101 @@ void main() {
       const empty = CompressionResult(originalBytes: 0, compressedBytes: 0);
       expect(empty.savedFraction, 0);
       expect(empty.isNoOp, isTrue);
+    });
+  });
+
+  group('free runs', () {
+    test('keeping a real saving spends one free run', () async {
+      engine.compressionRatio = 0.25;
+      final outcome = await run();
+      expect(entitlements.usedFor('compress'), 0, reason: 'not spent yet');
+
+      await outcome.keep(services);
+      expect(entitlements.usedFor('compress'), 1);
+    });
+
+    test('discarding spends nothing', () async {
+      engine.compressionRatio = 0.25;
+      final outcome = await run();
+      await outcome.discard();
+
+      expect(entitlements.usedFor('compress'), 0);
+    });
+
+    test('keeping an already-optimized result spends nothing', () async {
+      // Requirements.md 3.7: a no-op costs the user nothing, even if kept.
+      engine.compressionRatio = 0.97;
+      final outcome = await run();
+      expect(outcome.result.isNoOp, isTrue);
+
+      await outcome.keep(services);
+      expect(entitlements.usedFor('compress'), 0);
+    });
+
+    test('a failed compression spends nothing', () async {
+      engine.failWith = const PdfFailure(FailureKind.corruptFile);
+      final job = JobController<CompressionOutcome>();
+      await job.run((handle) async => compressDocument(
+            services: services,
+            source: await input('scan.pdf', 4),
+            level: CompressionLevel.balanced,
+            handle: handle,
+          ));
+
+      expect(job.status, JobStatus.failure);
+      expect(entitlements.usedFor('compress'), 0);
+    });
+
+    test('a cancelled compression spends nothing', () async {
+      engine.gate = Completer<void>();
+      final job = JobController<CompressionOutcome>();
+      final running = job.run((handle) async => compressDocument(
+            services: services,
+            source: await input('scan.pdf', 4),
+            level: CompressionLevel.balanced,
+            handle: handle,
+          ));
+      await Future<void>.delayed(Duration.zero);
+      job.cancel();
+      engine.gate!.complete();
+      await running;
+
+      expect(entitlements.usedFor('compress'), 0);
+    });
+
+    test('three keeps exhaust the allowance', () async {
+      engine.compressionRatio = 0.25;
+      for (var i = 0; i < 3; i++) {
+        final outcome = await run(name: 'scan$i.pdf');
+        await outcome.keep(services);
+      }
+
+      final allowance = await entitlements.allowanceFor('compress');
+      expect(allowance.remaining, 0);
+      expect(allowance.canUse, isFalse);
+    });
+
+    test('premium keeps do not count', () async {
+      entitlements = FakeEntitlements(isPremium: true);
+      services = AppServices(
+        engine: engine,
+        store: DocumentStore(
+          engine: engine,
+          documentsRoot: () async => root,
+          tempRoot: () async => root,
+        ),
+        importer: FakeFileImporter([]),
+        library: library,
+        gallery: FakeGallerySaver(),
+        entitlements: entitlements,
+      );
+      engine.compressionRatio = 0.25;
+
+      final outcome = await run();
+      await outcome.keep(services);
+
+      expect(entitlements.usedFor('compress'), 0);
+      expect((await entitlements.allowanceFor('compress')).canUse, isTrue);
     });
   });
 }

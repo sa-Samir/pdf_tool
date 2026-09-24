@@ -33,7 +33,7 @@ class CompressionOutcome {
 
   var _settled = false;
 
-  /// Commits the result and records it in the library.
+  /// Commits the result, records it in the library, and spends one free run.
   Future<File> keep(AppServices services) async {
     if (_settled) throw StateError('this outcome was already settled');
     _settled = true;
@@ -45,6 +45,12 @@ class CompressionOutcome {
         operation: 'Compressed · saved ${result.savedPercent}%',
         toolId: 'compress',
       );
+      // Spent here rather than in the UI, because this is the one place that
+      // means "the user kept it". A result that did not shrink costs nothing
+      // (requirements.md 3.7).
+      if (!result.isNoOp) {
+        await services.entitlements.recordUse('compress');
+      }
       return saved;
     } finally {
       await _workspace.dispose();

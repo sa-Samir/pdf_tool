@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:pdf_toolbox/core/engine/compression.dart';
+import 'package:flutter/foundation.dart';
 import 'package:pdf_toolbox/core/engine/pdf_engine.dart';
+import 'package:pdf_toolbox/core/entitlements/entitlements.dart';
 import 'package:pdf_toolbox/core/engine/pdf_failure.dart';
 import 'package:pdf_toolbox/core/files/file_importer.dart';
 import 'package:pdf_toolbox/core/images/gallery_saver.dart';
@@ -704,4 +705,39 @@ class FakeGallerySaver implements GallerySaver {
     }
     return outcome;
   }
+}
+
+/// In-memory entitlements for tests.
+class FakeEntitlements implements Entitlements {
+  FakeEntitlements({this.isPremium = false, Map<String, int>? used})
+      : _used = {...?used};
+
+  @override
+  final bool isPremium;
+
+  final Map<String, int> _used;
+  final _notifier = _TestNotifier();
+
+  int usedFor(String toolId) => _used[toolId] ?? 0;
+
+  @override
+  Listenable get changes => _notifier;
+
+  @override
+  Future<ToolAllowance> allowanceFor(String toolId) async => ToolAllowance(
+        toolId: toolId,
+        used: _used[toolId] ?? 0,
+        isPremium: isPremium,
+      );
+
+  @override
+  Future<void> recordUse(String toolId) async {
+    if (isPremium) return;
+    _used[toolId] = (_used[toolId] ?? 0) + 1;
+    _notifier.ping();
+  }
+}
+
+class _TestNotifier extends ChangeNotifier {
+  void ping() => notifyListeners();
 }

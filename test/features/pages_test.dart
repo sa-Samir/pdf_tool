@@ -24,6 +24,7 @@ void main() {
       importer: importer,
       library: FakeLibraryRepository(),
       gallery: FakeGallerySaver(),
+      entitlements: FakeEntitlements(),
     );
   }
 

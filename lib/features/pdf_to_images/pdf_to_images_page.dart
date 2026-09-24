@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../core/engine/pdf_failure.dart';
+import '../../core/entitlements/tool_limits.dart';
 import '../../core/files/file_importer.dart';
 import '../../core/images/gallery_saver.dart';
 import '../../core/jobs/job_controller.dart';
@@ -267,10 +268,21 @@ class _PdfToImagesPageState extends State<PdfToImagesPage> {
                 selected: _dpi,
                 labelOf: (v) => '${v.label} (${v.dpi} dpi)',
                 enabled: !running,
+                // Requirements.md 9: 300 dpi is premium, and the card says so.
+                isLocked: (v) =>
+                    !AppServicesScope.of(context).entitlements.isPremium &&
+                    v.dpi > ToolLimits.maxFreeDpi,
                 onChanged: (v) {
                   setState(() => _dpi = v);
                   _refreshEstimate();
                 },
+                onLockedTap: () => ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(const SnackBar(
+                    content: Text(
+                      'The free version exports up to 150 dpi.',
+                    ),
+                  )),
               ),
               const SizedBox(height: Insets.sm),
               _EstimateCard(
@@ -464,6 +476,8 @@ class _Chips<T> extends StatelessWidget {
     required this.labelOf,
     required this.enabled,
     required this.onChanged,
+    this.isLocked,
+    this.onLockedTap,
   });
 
   final String label;
@@ -472,6 +486,11 @@ class _Chips<T> extends StatelessWidget {
   final String Function(T) labelOf;
   final bool enabled;
   final ValueChanged<T> onChanged;
+
+  /// Options the free tier cannot pick. Shown, but with a lock, so the limit
+  /// is visible rather than the option quietly missing.
+  final bool Function(T)? isLocked;
+  final VoidCallback? onLockedTap;
 
   @override
   Widget build(BuildContext context) {
@@ -494,8 +513,15 @@ class _Chips<T> extends StatelessWidget {
               for (final value in values)
                 ChoiceChip(
                   label: Text(labelOf(value)),
+                  avatar: (isLocked?.call(value) ?? false)
+                      ? const Icon(Icons.lock_outline, size: 16)
+                      : null,
                   selected: value == selected,
-                  onSelected: enabled ? (_) => onChanged(value) : null,
+                  onSelected: !enabled
+                      ? null
+                      : (_) => (isLocked?.call(value) ?? false)
+                          ? onLockedTap?.call()
+                          : onChanged(value),
                 ),
             ],
           ),

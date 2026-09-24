@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../core/engine/pdf_failure.dart';
+import '../../core/entitlements/tool_limits.dart';
 import '../../core/images/image_normalizer.dart';
 import '../../core/images/page_layout.dart';
 import '../../core/jobs/job_controller.dart';
@@ -66,8 +67,24 @@ class _ImagesToPdfPageState extends State<ImagesToPdfPage> {
     try {
       final picked = await services.importer.pickImages();
       if (!mounted || picked.isEmpty) return;
+
+      final room = services.entitlements.isPremium
+          ? picked.length
+          : (ToolLimits.imagesToPdfFreeImages - _images.length)
+              .clamp(0, picked.length);
+      if (room < picked.length) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: Text(
+              'The free version takes up to '
+              '${ToolLimits.imagesToPdfFreeImages} images at a time.',
+            ),
+          ));
+      }
+      if (room == 0) return;
       setState(() => _images.addAll(
-            [for (final doc in picked) PickedImage(document: doc)],
+            [for (final doc in picked.take(room)) PickedImage(document: doc)],
           ));
     } on PdfFailure catch (failure) {
       if (mounted) setState(() => _importFailure = failure);

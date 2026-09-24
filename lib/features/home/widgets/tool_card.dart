@@ -1,15 +1,34 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/entitlements/entitlements.dart';
 import '../../../core/models/pdf_tool.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 
 /// One tool on the home grid.
 class ToolCard extends StatelessWidget {
-  const ToolCard({super.key, required this.tool, required this.onTap});
+  const ToolCard({
+    super.key,
+    required this.tool,
+    required this.onTap,
+    this.allowance,
+  });
 
   final PdfTool tool;
   final VoidCallback onTap;
+
+  /// What is left of the free allowance, when it is known.
+  final ToolAllowance? allowance;
+
+  String? _premiumNote() {
+    final current = allowance;
+    if (current == null) return null; // Say nothing rather than guess.
+    if (current.isPremium) return null;
+    return current.isExhausted
+        ? 'Free runs used'
+        : '${current.remaining} free '
+            '${current.remaining == 1 ? 'run' : 'runs'} left';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,9 +36,10 @@ class ToolCard extends StatelessWidget {
     final accent = AppColors.accentFor(tool.group, theme.brightness);
 
     // Requirements.md 3.1: the tier is shown only where a limit applies, so a
-    // free tool is never mistaken for a premium one.
+    // free tool is never mistaken for a premium one. For a premium tool the
+    // number shown is the real remaining count, not a fixed label.
     final note = tool.tierNote ??
-        (tool.tier == ToolTier.premium ? '3 free uses' : null);
+        (tool.tier == ToolTier.premium ? _premiumNote() : null);
 
     return Semantics(
       button: true,

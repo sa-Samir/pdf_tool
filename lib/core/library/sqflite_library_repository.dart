@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
+import '../entitlements/sqflite_entitlements.dart';
 import '../files/document_store.dart';
 import 'library_document.dart';
 import 'library_repository.dart';
@@ -34,7 +35,8 @@ class SqfliteLibraryRepository implements LibraryRepository {
   /// Bumped whenever the schema changes; [migrate] handles the upgrade.
   ///   1 -- documents
   ///   2 -- folders, and documents.folder_id
-  static const schemaVersion = 2;
+  ///   3 -- tool_usage, for the free-tier counts
+  static const schemaVersion = 3;
 
   /// Opens (and migrates) the database at [path].
   ///
@@ -66,6 +68,7 @@ class SqfliteLibraryRepository implements LibraryRepository {
       'CREATE INDEX idx_documents_created_at ON $_table (created_at DESC)',
     );
     await _createFolderTable(db);
+    await SqfliteEntitlements.createSchema(db);
   }
 
   static Future<void> _createFolderTable(Database db) async {
@@ -86,6 +89,8 @@ class SqfliteLibraryRepository implements LibraryRepository {
         case 1:
           await _createFolderTable(db);
           await db.execute('ALTER TABLE $_table ADD COLUMN folder_id TEXT');
+        case 2:
+          await SqfliteEntitlements.createSchema(db);
       }
     }
   }

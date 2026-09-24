@@ -6,8 +6,10 @@ import '../../core/files/file_importer.dart';
 import '../../core/jobs/job_controller.dart';
 import '../../core/services/app_services.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/entitlements/entitlements.dart';
 import '../shared/job_views.dart';
 import '../shared/result_page.dart';
+import '../shared/upgrade_notice.dart';
 import 'compress_operation.dart';
 import 'widgets/compare_preview.dart';
 
@@ -30,6 +32,7 @@ class _CompressPageState extends State<CompressPage> {
   CompressionOutlook? _outlook;
   CompressionLevel _level = CompressionLevel.balanced;
   PdfFailure? _failure;
+  ToolAllowance? _allowance;
   bool _inspecting = false;
   bool _saving = false;
 
@@ -37,6 +40,19 @@ class _CompressPageState extends State<CompressPage> {
   void initState() {
     super.initState();
     _job.addListener(_onJobChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _allowance ??= null;
+    _refreshAllowance();
+  }
+
+  Future<void> _refreshAllowance() async {
+    final allowance =
+        await AppServicesScope.of(context).entitlements.allowanceFor('compress');
+    if (mounted) setState(() => _allowance = allowance);
   }
 
   @override
@@ -100,7 +116,10 @@ class _CompressPageState extends State<CompressPage> {
     setState(() => _saving = true);
     final services = AppServicesScope.of(context);
     final navigator = Navigator.of(context);
+    // keep() spends the free run; this only refreshes what is on screen.
     final saved = await outcome.keep(services);
+    if (!mounted) return;
+    await _refreshAllowance();
     if (!mounted) return;
     navigator.pushReplacement(
       MaterialPageRoute<void>(
@@ -159,6 +178,7 @@ class _CompressPageState extends State<CompressPage> {
     final theme = Theme.of(context);
     final outlook = _outlook;
     final running = _job.isRunning;
+    final allowance = _allowance;
 
     return [
       Card(
@@ -214,11 +234,20 @@ class _CompressPageState extends State<CompressPage> {
         const SizedBox(height: Insets.lg),
         if (running)
           JobProgressView(progress: _job.progress, onCancel: _job.cancel)
-        else
+        else if (allowance != null && allowance.isExhausted) ...[
+          const UpgradeNotice(toolLabel: 'compress'),
+          const SizedBox(height: Insets.md),
+          FilledButton(onPressed: null, child: const Text('Compress')),
+        ] else ...[
           FilledButton(
             onPressed: _run,
             child: const Text('Compress'),
           ),
+          if (allowance != null && !allowance.isPremium) ...[
+            const SizedBox(height: Insets.sm),
+            Center(child: RemainingUses(remaining: allowance.remaining)),
+          ],
+        ],
         const SizedBox(height: Insets.md),
         Text(
           'Text stays text. Pages are never turned into pictures, so the '
@@ -341,7 +370,7 @@ class _Outcome extends StatelessWidget {
                   ),
                   const SizedBox(height: Insets.sm),
                   Text(
-                    "This didn't use one of your free compressions.",
+                    "This didn't use one of your free runs.",
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),

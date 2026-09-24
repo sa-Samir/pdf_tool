@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/entitlements/entitlements.dart';
 import '../../../core/models/pdf_tool.dart';
 import '../../../core/theme/app_theme.dart';
 import 'tool_card.dart';
@@ -11,11 +12,15 @@ class ToolGroupSection extends StatelessWidget {
     required this.group,
     required this.tools,
     required this.onToolTap,
+    this.allowances = const {},
   });
 
   final ToolGroup group;
   final List<PdfTool> tools;
   final void Function(PdfTool tool) onToolTap;
+
+  /// Remaining free runs, by tool id.
+  final Map<String, ToolAllowance> allowances;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +44,11 @@ class ToolGroupSection extends StatelessWidget {
             ),
           ),
         ),
-        _ResponsiveToolGrid(tools: tools, onToolTap: onToolTap),
+        _ResponsiveToolGrid(
+          tools: tools,
+          onToolTap: onToolTap,
+          allowances: allowances,
+        ),
       ],
     );
   }
@@ -48,10 +57,15 @@ class ToolGroupSection extends StatelessWidget {
 /// Requirements.md 18.4: phone, large-phone and tablet breakpoints from the
 /// first commit, because retrofitting a stretched phone layout is expensive.
 class _ResponsiveToolGrid extends StatelessWidget {
-  const _ResponsiveToolGrid({required this.tools, required this.onToolTap});
+  const _ResponsiveToolGrid({
+    required this.tools,
+    required this.onToolTap,
+    required this.allowances,
+  });
 
   final List<PdfTool> tools;
   final void Function(PdfTool tool) onToolTap;
+  final Map<String, ToolAllowance> allowances;
 
   @override
   Widget build(BuildContext context) {
@@ -84,6 +98,7 @@ class _ResponsiveToolGrid extends StatelessWidget {
           ),
           itemBuilder: (context, i) => ToolCard(
             tool: tools[i],
+            allowance: allowances[tools[i].id],
             onTap: () => onToolTap(tools[i]),
           ),
         );

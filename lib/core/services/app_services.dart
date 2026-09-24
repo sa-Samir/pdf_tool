@@ -6,6 +6,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../engine/pdf_engine.dart';
+import '../entitlements/entitlements.dart';
+import '../entitlements/sqflite_entitlements.dart';
 import '../engine/pdf_manipulator_engine.dart';
 import '../files/document_store.dart';
 import '../files/export_service.dart';
@@ -29,6 +31,7 @@ class AppServices {
     required this.library,
     required this.images,
     required this.gallery,
+    required this.entitlements,
   });
 
   factory AppServices({
@@ -39,9 +42,15 @@ class AppServices {
     ExportService export = const ExportService(),
     ImageNormalizer images = const PlatformImageNormalizer(),
     GallerySaver gallery = const PlatformGallerySaver(),
+    Entitlements? entitlements,
   }) {
     final resolvedEngine = engine ?? PdfManipulatorEngine();
     final resolvedStore = store ?? DocumentStore(engine: resolvedEngine);
+    // One database for the library and the free-tier counts, so they migrate
+    // together (requirements.md 17). Opened only if something actually needs
+    // it: a caller that injects both must not touch the filesystem at all.
+    Future<Database>? database;
+    Future<Database> sharedDatabase() => database ??= _openDatabase();
     return AppServices._(
       engine: resolvedEngine,
       store: resolvedStore,
@@ -49,12 +58,14 @@ class AppServices {
       export: export,
       images: images,
       gallery: gallery,
+      entitlements:
+          entitlements ?? SqfliteEntitlements(database: sharedDatabase()),
       library: library ??
           SqfliteLibraryRepository(
             store: resolvedStore,
             // Unawaited on purpose: opening the database must not delay the
             // first frame (requirements.md 3.1).
-            database: _openDatabase(),
+            database: sharedDatabase(),
           ),
     );
   }
@@ -71,6 +82,7 @@ class AppServices {
   final LibraryRepository library;
   final ImageNormalizer images;
   final GallerySaver gallery;
+  final Entitlements entitlements;
 
   Future<void> dispose() => engine.dispose();
 }

@@ -18,15 +18,19 @@ import 'package:pdf_toolbox/features/tool/tool_placeholder_page.dart';
 import 'fakes.dart';
 
 late FakeLibraryRepository library;
+late FakeEntitlements entitlements;
 
-AppServices _services() {
+AppServices _services({FakeEntitlements? withEntitlements}) {
   final engine = MemoryFakeEngine(const {});
   library = FakeLibraryRepository();
+  entitlements = withEntitlements ?? FakeEntitlements();
   return AppServices(
     engine: engine,
     store: DocumentStore(engine: engine),
     importer: FakeFileImporter([]),
     library: library,
+    gallery: FakeGallerySaver(),
+    entitlements: entitlements,
   );
 }
 
@@ -34,9 +38,11 @@ Widget _host(
   Widget child, {
   List<LibraryDocument> recents = const [],
   Duration listDelay = Duration.zero,
+  FakeEntitlements? withEntitlements,
 }) {
   final engine = MemoryFakeEngine(const {});
   library = FakeLibraryRepository(recents)..listDelay = listDelay;
+  entitlements = withEntitlements ?? FakeEntitlements();
   return AppServicesScope(
     services: AppServices(
       engine: engine,
@@ -44,6 +50,7 @@ Widget _host(
       importer: FakeFileImporter([]),
       library: library,
       gallery: FakeGallerySaver(),
+      entitlements: entitlements,
     ),
     child: MaterialApp(home: child),
   );
@@ -56,14 +63,18 @@ Future<void> _pumpHome(
   WidgetTester tester, {
   List<LibraryDocument> recents = const [],
   Duration listDelay = Duration.zero,
+  FakeEntitlements? withEntitlements,
 }) async {
   tester.view.physicalSize = const Size(1200, 3000);
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
-  await tester.pumpWidget(
-    _host(const HomePage(), recents: recents, listDelay: listDelay),
-  );
+  await tester.pumpWidget(_host(
+    const HomePage(),
+    recents: recents,
+    listDelay: listDelay,
+    withEntitlements: withEntitlements,
+  ));
 }
 
 void main() {
@@ -167,7 +178,29 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Up to 3 files'), findsOneWidget); // Merge
-      expect(find.text('3 free uses'), findsOneWidget); // Compress
+      // The premium card shows what is actually left, not a fixed label.
+      expect(find.text('3 free runs left'), findsOneWidget); // Compress
+    });
+
+    testWidgets('a premium card counts down as runs are spent',
+        (tester) async {
+      await _pumpHome(tester);
+      await tester.pumpAndSettle();
+      expect(find.text('3 free runs left'), findsOneWidget);
+
+      await entitlements.recordUse('compress');
+      await _pumpHome(tester, withEntitlements: entitlements);
+      await tester.pumpAndSettle();
+      expect(find.text('2 free runs left'), findsOneWidget);
+    });
+
+    testWidgets('an exhausted premium card says so', (tester) async {
+      final spent = FakeEntitlements(used: const {'compress': 3});
+      await _pumpHome(tester, withEntitlements: spent);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Free runs used'), findsOneWidget);
+      expect(find.textContaining('free runs left'), findsNothing);
     });
 
     testWidgets('lists recent documents once they load', (tester) async {

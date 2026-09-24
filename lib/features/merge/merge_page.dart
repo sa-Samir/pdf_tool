@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../core/engine/pdf_failure.dart';
+import '../../core/entitlements/tool_limits.dart';
 import '../../core/files/file_importer.dart';
 import '../../core/jobs/job_controller.dart';
 import '../../core/services/app_services.dart';
@@ -73,13 +74,35 @@ class _MergePageState extends State<MergePage> {
     try {
       final picked = await services.importer.pickPdfs();
       if (!mounted || picked.isEmpty) return;
-      setState(() => _documents.addAll(picked));
-      for (final doc in picked) {
+
+      // Requirements.md 9: the free tier merges up to three files, and the
+      // card says so, so the limit has to be real.
+      final isPremium = services.entitlements.isPremium;
+      final room = isPremium
+          ? picked.length
+          : (ToolLimits.mergeFreeFiles - _documents.length)
+              .clamp(0, picked.length);
+      if (room < picked.length) {
+        _reportCapped(
+          'The free version merges up to ${ToolLimits.mergeFreeFiles} '
+          'files at a time.',
+        );
+      }
+      if (room == 0) return;
+      final accepted = picked.take(room).toList();
+      setState(() => _documents.addAll(accepted));
+      for (final doc in accepted) {
         _loadPageCount(doc);
       }
     } on PdfFailure catch (failure) {
       if (mounted) setState(() => _importFailure = failure);
     }
+  }
+
+  void _reportCapped(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _loadPageCount(ImportedDocument doc) async {

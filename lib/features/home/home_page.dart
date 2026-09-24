@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/catalog/tool_catalog.dart';
+import '../../core/entitlements/entitlements.dart';
 import '../../core/library/library_document.dart';
 import '../../core/models/pdf_tool.dart';
 import '../../core/services/app_services.dart';
@@ -32,16 +33,33 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final _searchController = TextEditingController();
   Future<List<LibraryDocument>>? _recents;
+  final _allowances = <String, ToolAllowance>{};
   String _query = '';
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _recents ??= _loadRecents();
+    _loadAllowances();
   }
 
   Future<List<LibraryDocument>> _loadRecents() =>
       AppServicesScope.of(context).library.list(limit: 10);
+
+  /// Reads how many free runs each premium tool has left, so a card never
+  /// shows a number the app will not honour.
+  Future<void> _loadAllowances() async {
+    final entitlements = AppServicesScope.of(context).entitlements;
+    final premium = [
+      for (final tool in ToolCatalog.shipped)
+        if (tool.tier == ToolTier.premium) tool.id,
+    ];
+    final loaded = <String, ToolAllowance>{};
+    for (final id in premium) {
+      loaded[id] = await entitlements.allowanceFor(id);
+    }
+    if (mounted) setState(() => _allowances.addAll(loaded));
+  }
 
   void _refreshRecents() => setState(() {
         _recents = _loadRecents();
@@ -76,8 +94,12 @@ class _HomePageState extends State<HomePage> {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => _screenFor(tool)),
     );
-    // Coming back from a tool usually means a new file exists.
-    if (mounted) _refreshRecents();
+    // Coming back from a tool usually means a new file exists, and may mean a
+    // free run was spent.
+    if (mounted) {
+      _refreshRecents();
+      _loadAllowances();
+    }
   }
 
   void _openSettings() {
@@ -188,6 +210,7 @@ class _HomePageState extends State<HomePage> {
                       ToolGroupSection(
                         group: entry.key,
                         tools: entry.value,
+                        allowances: _allowances,
                         onToolTap: _openTool,
                       ),
                   const SizedBox(height: Insets.xl),

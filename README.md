@@ -47,6 +47,10 @@ Phase 1 foundation and the first two tools (roadmap.md 5, 7).
   highlighted hits and next/previous.
 - **Folders**: create, rename, delete and move. Deleting a folder keeps its
   files. Browsing stays in a folder; searching looks everywhere.
+- **Free-tier limits**, actually enforced: three lifetime runs per premium
+  tool, counted in the database, plus the merge, image-count and DPI caps the
+  cards advertise. A run is spent only when a result is kept and it genuinely
+  helped.
 - **Library**: a local SQLite record of everything the app produces, wired into
   every save. Recents on the home screen, a Files screen with search, sort and
   favourites, rename/share/delete, retention, and clear-history in Settings.

@@ -20,6 +20,7 @@ void main() {
       importer: FakeFileImporter([]),
       library: library,
       gallery: FakeGallerySaver(),
+      entitlements: FakeEntitlements(),
     );
   }
 

@@ -25,6 +25,7 @@ void main() {
       importer: FakeFileImporter([]),
       library: FakeLibraryRepository(),
       gallery: FakeGallerySaver(),
+      entitlements: FakeEntitlements(),
       images: FakeImageNormalizer(),
     );
   }
@@ -218,6 +219,7 @@ void main() {
         importer: FakeFileImporter([]),
         library: FakeLibraryRepository(),
       gallery: FakeGallerySaver(),
+      entitlements: FakeEntitlements(),
         images: FakeImageNormalizer(),
       );
       await pump(tester);

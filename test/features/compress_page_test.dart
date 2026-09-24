@@ -15,14 +15,19 @@ void main() {
   late MemoryFakeEngine engine;
   late AppServices services;
 
-  AppServices build() {
+  late FakeEntitlements entitlements;
+
+  AppServices build({int used = 0, bool isPremium = false}) {
     engine = MemoryFakeEngine({'/memory/doc.pdf': 12});
+    entitlements =
+        FakeEntitlements(isPremium: isPremium, used: {'compress': used});
     return AppServices(
       engine: engine,
       store: DocumentStore(engine: engine),
       importer: importer,
       library: FakeLibraryRepository(),
       gallery: FakeGallerySaver(),
+      entitlements: entitlements,
     );
   }
 
@@ -127,5 +132,46 @@ void main() {
       find.byType(SegmentedButton<CompressionLevel>),
     );
     expect(segmented.selected, {CompressionLevel.balanced});
+  });
+
+  group('free runs', () {
+    testWidgets('shows how many free runs are left', (tester) async {
+      services = build(used: 1);
+      await choose(tester);
+      expect(find.text('2 of 3 free runs left'), findsOneWidget);
+    });
+
+    testWidgets('the last run is phrased in the singular', (tester) async {
+      services = build(used: 2);
+      await choose(tester);
+      expect(find.text('1 free run left'), findsOneWidget);
+    });
+
+    testWidgets('an exhausted allowance blocks the button and says why',
+        (tester) async {
+      services = build(used: 3);
+      await choose(tester);
+
+      expect(find.textContaining("You've used your 3 free"), findsOneWidget);
+      // Honest about there being nothing to buy yet.
+      expect(find.textContaining('not on sale yet'), findsOneWidget);
+
+      final button = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Compress'),
+      );
+      expect(button.onPressed, isNull);
+    });
+
+    testWidgets('premium shows no counter and is not blocked', (tester) async {
+      services = build(used: 99, isPremium: true);
+      await choose(tester);
+
+      expect(find.textContaining('free runs left'), findsNothing);
+      expect(find.textContaining("You've used"), findsNothing);
+      final button = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Compress'),
+      );
+      expect(button.onPressed, isNotNull);
+    });
   });
 }
