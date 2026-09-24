@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../core/engine/compression.dart';
 import '../../core/engine/pdf_failure.dart';
-import '../../core/files/file_importer.dart';
+import '../../core/files/save_target.dart';
 import '../../core/jobs/job_controller.dart';
 import '../../core/services/app_services.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/entitlements/entitlements.dart';
 import '../shared/job_views.dart';
 import '../shared/result_page.dart';
+import '../shared/save_choice_sheet.dart';
 import '../shared/upgrade_notice.dart';
 import 'compress_operation.dart';
 import 'widgets/compare_preview.dart';
@@ -19,7 +20,10 @@ import 'widgets/compare_preview.dart';
 /// real numbers afterwards, and treat "we could not make this smaller" as a
 /// first-class outcome rather than dressing up a 1% saving.
 class CompressPage extends StatefulWidget {
-  const CompressPage({super.key});
+  const CompressPage({super.key, this.source});
+
+  /// Opened straight from the library, so the result can replace it.
+  final EditableSource? source;
 
   @override
   State<CompressPage> createState() => _CompressPageState();
@@ -28,7 +32,7 @@ class CompressPage extends StatefulWidget {
 class _CompressPageState extends State<CompressPage> {
   final _job = JobController<CompressionOutcome>();
 
-  ImportedDocument? _document;
+  EditableSource? _source;
   CompressionOutlook? _outlook;
   CompressionLevel _level = CompressionLevel.balanced;
   PdfFailure? _failure;
@@ -47,6 +51,7 @@ class _CompressPageState extends State<CompressPage> {
     super.didChangeDependencies();
     _allowance ??= null;
     _refreshAllowance();
+    if (widget.source != null && _source == null) _inspect(widget.source!);
   }
 
   Future<void> _refreshAllowance() async {
@@ -75,14 +80,31 @@ class _CompressPageState extends State<CompressPage> {
     try {
       final picked = await services.importer.pickPdfs(multiple: false);
       if (!mounted || picked.isEmpty) return;
-      setState(() {
-        _document = picked.first;
-        _outlook = null;
-        _inspecting = true;
-      });
+      await _inspect(EditableSource.imported(
+        file: picked.first.file,
+        displayName: picked.first.displayName,
+      ));
+    } on PdfFailure catch (failure) {
+      if (mounted) {
+        setState(() {
+          _failure = failure;
+          _inspecting = false;
+          _source = null;
+        });
+      }
+    }
+  }
 
-      final outlook =
-          await services.engine.inspectForCompression(picked.first.file);
+  Future<void> _inspect(EditableSource source) async {
+    final services = AppServicesScope.of(context);
+    setState(() {
+      _source = source;
+      _outlook = null;
+      _inspecting = true;
+      _failure = null;
+    });
+    try {
+      final outlook = await services.engine.inspectForCompression(source.file);
       if (mounted) {
         setState(() {
           _outlook = outlook;
@@ -94,7 +116,7 @@ class _CompressPageState extends State<CompressPage> {
         setState(() {
           _failure = failure;
           _inspecting = false;
-          _document = null;
+          _source = null;
         });
       }
     }
@@ -102,7 +124,7 @@ class _CompressPageState extends State<CompressPage> {
 
   void _run() {
     final services = AppServicesScope.of(context);
-    final source = _document!.file;
+    final source = _source!;
     final level = _level;
     _job.run((handle) => compressDocument(
           services: services,
@@ -113,11 +135,25 @@ class _CompressPageState extends State<CompressPage> {
   }
 
   Future<void> _keep(CompressionOutcome outcome) async {
-    setState(() => _saving = true);
     final services = AppServicesScope.of(context);
+
+    // Only a document the app owns can be replaced (requirements.md 5.2).
+    var target = SaveTarget.newFile;
+    if (outcome.source.canReplace) {
+      final chosen = await askSaveTarget(
+        context,
+        documentName: outcome.source.displayName,
+        changeSummary: '${formatBytes(outcome.result.originalBytes)} to '
+            '${formatBytes(outcome.result.compressedBytes)}.',
+      );
+      if (chosen == null || !mounted) return;
+      target = chosen;
+    }
+
+    setState(() => _saving = true);
     final navigator = Navigator.of(context);
     // keep() spends the free run; this only refreshes what is on screen.
-    final saved = await outcome.keep(services);
+    final saved = await outcome.keep(services, target: target);
     if (!mounted) return;
     await _refreshAllowance();
     if (!mounted) return;
@@ -157,7 +193,7 @@ class _CompressPageState extends State<CompressPage> {
               FailureView(failure: failure, onRetry: _run),
               const SizedBox(height: Insets.lg),
             ],
-            if (_document == null)
+            if (_source == null)
               _ChooseCard(onChoose: _choose)
             else if (outcome != null)
               _Outcome(
@@ -188,7 +224,7 @@ class _CompressPageState extends State<CompressPage> {
             color: theme.colorScheme.primary,
           ),
           title: Text(
-            _document!.displayName,
+            _source!.displayName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -412,7 +448,7 @@ class _Outcome extends StatelessWidget {
         const SizedBox(height: Insets.lg),
         ComparePreview(
           engine: services.engine,
-          original: outcome.source,
+          original: outcome.source.file,
           compressed: outcome.file,
         ),
         const SizedBox(height: Insets.lg),

@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 
 import '../../core/engine/compression.dart';
 import '../../core/files/document_store.dart';
+import '../../core/files/save_target.dart';
 import '../../core/jobs/job_controller.dart';
 import '../../core/services/app_services.dart';
 
@@ -22,7 +23,7 @@ class CompressionOutcome {
     required Workspace workspace,
   }) : _workspace = workspace;
 
-  final File source;
+  final EditableSource source;
 
   /// The compressed file, still in its workspace.
   final File file;
@@ -34,17 +35,31 @@ class CompressionOutcome {
   var _settled = false;
 
   /// Commits the result, records it in the library, and spends one free run.
-  Future<File> keep(AppServices services) async {
+  Future<File> keep(
+    AppServices services, {
+    SaveTarget target = SaveTarget.newFile,
+  }) async {
     if (_settled) throw StateError('this outcome was already settled');
     _settled = true;
     try {
-      final name = '${p.basenameWithoutExtension(source.path)} (compressed).pdf';
-      final saved = await services.store.commit(file, desiredName: name);
-      await services.library.record(
-        file: saved,
-        operation: 'Compressed · saved ${result.savedPercent}%',
-        toolId: 'compress',
-      );
+      final operation = 'Compressed · saved ${result.savedPercent}%';
+      final document = source.document;
+      final File saved;
+
+      if (target == SaveTarget.replaceOriginal && document != null) {
+        saved = await services.store.replace(file, target: source.file);
+        await services.library
+            .refreshAfterReplace(document.id, operation: operation);
+      } else {
+        final name =
+            '${p.basenameWithoutExtension(source.file.path)} (compressed).pdf';
+        saved = await services.store.commit(file, desiredName: name);
+        await services.library.record(
+          file: saved,
+          operation: operation,
+          toolId: 'compress',
+        );
+      }
       // Spent here rather than in the UI, because this is the one place that
       // means "the user kept it". A result that did not shrink costs nothing
       // (requirements.md 3.7).
@@ -68,7 +83,7 @@ class CompressionOutcome {
 /// Compresses [source], leaving the result for the user to accept or discard.
 Future<CompressionOutcome> compressDocument({
   required AppServices services,
-  required File source,
+  required EditableSource source,
   required CompressionLevel level,
   required JobHandle handle,
 }) async {
@@ -76,7 +91,7 @@ Future<CompressionOutcome> compressDocument({
   try {
     final temp = workspace.file('compressed.pdf');
     final result = await services.engine.compress(
-      input: source,
+      input: source.file,
       output: temp,
       level: level,
       cancel: handle.cancel,

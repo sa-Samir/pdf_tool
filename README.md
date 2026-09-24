@@ -47,6 +47,10 @@ Phase 1 foundation and the first two tools (roadmap.md 5, 7).
   highlighted hits and next/previous.
 - **Folders**: create, rename, delete and move. Deleting a folder keeps its
   files. Browsing stays in a folder; searching looks everywhere.
+- **Save as a copy or replace the original**, asked before saving in the page
+  editor and Compress. Offered only for documents the app owns, because a
+  picked file is a copy and replacing it would change nothing the user sees.
+  Reachable through Edit pages and Compress in the Files list.
 - **Free-tier limits**, actually enforced: three lifetime runs per premium
   tool, counted in the database, plus the merge, image-count and DPI caps the
   cards advertise. A run is spent only when a result is kept and it genuinely

@@ -588,6 +588,30 @@ class FakeLibraryRepository implements LibraryRepository {
   }
 
   @override
+  Future<LibraryDocument> refreshAfterReplace(
+    String id, {
+    required String operation,
+    int? pageCount,
+  }) async {
+    final index = _documents.indexWhere((d) => d.id == id);
+    final existing = _documents[index];
+    final updated = LibraryDocument(
+      id: existing.id,
+      name: existing.name,
+      relativePath: existing.relativePath,
+      sizeBytes: existing.sizeBytes,
+      pageCount: pageCount ?? existing.pageCount,
+      operation: operation,
+      toolId: existing.toolId,
+      createdAt: DateTime.now(),
+      favorite: existing.favorite,
+      folderId: existing.folderId,
+    );
+    _documents[index] = updated;
+    return updated;
+  }
+
+  @override
   Future<void> setFavorite(String id, bool favorite) async {
     final index = _documents.indexWhere((d) => d.id == id);
     _documents[index] = _documents[index].copyWith(favorite: favorite);

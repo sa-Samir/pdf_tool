@@ -2,9 +2,13 @@
 import 'package:flutter/material.dart';
 
 import '../../core/library/library_document.dart';
+import '../../core/catalog/tool_catalog.dart';
+import '../../core/files/save_target.dart';
 import '../../core/services/app_services.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/job_views.dart';
+import '../compress/compress_page.dart';
+import '../pages/page_grid_page.dart';
 import '../viewer/viewer_page.dart';
 
 /// The files the app has produced (requirements.md 4 and 5.1).
@@ -195,6 +199,30 @@ class _LibraryPageState extends State<LibraryPage> {
     if (mounted) _reload();
   }
 
+  /// Opens a tool on a document the app owns, which is what makes replacing
+  /// the original possible at all (requirements.md 5.2).
+  Future<void> _editWith(LibraryDocument document, String toolId) async {
+    final services = AppServicesScope.of(context);
+    final navigator = Navigator.of(context);
+    final file = await services.library.fileFor(document);
+    if (file == null) {
+      _reportMissing();
+      return;
+    }
+    final source = EditableSource.owned(document, file);
+    await navigator.push(
+      MaterialPageRoute<void>(
+        builder: (_) => toolId == 'compress'
+            ? CompressPage(source: source)
+            : PageGridPage(
+                tool: ToolCatalog.all.firstWhere((t) => t.id == 'reorder'),
+                source: source,
+              ),
+      ),
+    );
+    if (mounted) _reload();
+  }
+
   Future<void> _move(LibraryDocument document) async {
     final library = AppServicesScope.of(context).library;
     final folders = await library.folders();
@@ -364,6 +392,10 @@ class _LibraryPageState extends State<LibraryPage> {
                               onRename: () => _rename(document),
                               onDelete: () => _delete(document),
                               onMove: () => _move(document),
+                              onEditPages: () =>
+                                  _editWith(document, 'reorder'),
+                              onCompress: () =>
+                                  _editWith(document, 'compress'),
                               onToggleFavorite: () =>
                                   _toggleFavorite(document),
                             ),
@@ -402,6 +434,8 @@ class _DocumentTile extends StatelessWidget {
     required this.onRename,
     required this.onDelete,
     required this.onMove,
+    required this.onEditPages,
+    required this.onCompress,
     required this.onToggleFavorite,
   });
 
@@ -412,6 +446,8 @@ class _DocumentTile extends StatelessWidget {
   final VoidCallback onRename;
   final VoidCallback onDelete;
   final VoidCallback onMove;
+  final VoidCallback onEditPages;
+  final VoidCallback onCompress;
   final VoidCallback onToggleFavorite;
 
   @override
@@ -457,6 +493,8 @@ class _DocumentTile extends StatelessWidget {
             PopupMenuButton<String>(
               tooltip: 'More actions for ${document.name}',
               onSelected: (value) => switch (value) {
+                'pages' => onEditPages(),
+                'compress' => onCompress(),
                 'share' => onShare(),
                 'rename' => onRename(),
                 'move' => onMove(),
@@ -464,6 +502,9 @@ class _DocumentTile extends StatelessWidget {
                 _ => null,
               },
               itemBuilder: (context) => const [
+                PopupMenuItem(value: 'pages', child: Text('Edit pages')),
+                PopupMenuItem(value: 'compress', child: Text('Compress')),
+                PopupMenuDivider(),
                 PopupMenuItem(value: 'share', child: Text('Share')),
                 PopupMenuItem(value: 'rename', child: Text('Rename')),
                 PopupMenuItem(value: 'move', child: Text('Move to folder')),

@@ -269,6 +269,34 @@ class SqfliteLibraryRepository implements LibraryRepository {
   }
 
   @override
+  Future<LibraryDocument> refreshAfterReplace(
+    String id, {
+    required String operation,
+    int? pageCount,
+  }) async {
+    final existing = await byId(id);
+    if (existing == null) throw StateError('no library document $id');
+    final file = await fileFor(existing);
+
+    final updated = LibraryDocument(
+      id: existing.id,
+      name: existing.name,
+      relativePath: existing.relativePath,
+      sizeBytes: file == null ? existing.sizeBytes : await file.length(),
+      pageCount: pageCount ?? existing.pageCount,
+      operation: operation,
+      toolId: existing.toolId,
+      // Touched, so it surfaces in recents as the user expects.
+      createdAt: DateTime.now(),
+      favorite: existing.favorite,
+      folderId: existing.folderId,
+    );
+    await (await _db)
+        .update(_table, updated.toRow(), where: 'id = ?', whereArgs: [id]);
+    return updated;
+  }
+
+  @override
   Future<void> setFavorite(String id, bool favorite) async {
     await (await _db).update(
       _table,

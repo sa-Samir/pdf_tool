@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../core/engine/pdf_failure.dart';
-import '../../core/files/file_importer.dart';
+import '../../core/files/save_target.dart';
 import '../../core/jobs/job_controller.dart';
 import '../../core/models/pdf_tool.dart';
 import '../../core/pages/page_edit_session.dart';
@@ -11,6 +11,7 @@ import '../../core/pages/thumbnail_cache.dart';
 import '../../core/services/app_services.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/job_views.dart';
+import '../shared/save_choice_sheet.dart';
 import '../shared/result_page.dart';
 import 'page_operation.dart';
 import 'widgets/page_tile.dart';
@@ -23,9 +24,13 @@ import 'widgets/reorderable_grid.dart';
 /// edits themselves are all available at once, with a single undo stack and one
 /// save, because that is how people actually tidy a document.
 class PageGridPage extends StatefulWidget {
-  const PageGridPage({super.key, required this.tool});
+  const PageGridPage({super.key, required this.tool, this.source});
 
   final PdfTool tool;
+
+  /// Opened straight from the library, so the result can replace it. Null
+  /// when the user will pick a file instead.
+  final EditableSource? source;
 
   @override
   State<PageGridPage> createState() => _PageGridPageState();
@@ -34,7 +39,7 @@ class PageGridPage extends StatefulWidget {
 class _PageGridPageState extends State<PageGridPage> {
   final _job = JobController<File>();
 
-  ImportedDocument? _document;
+  EditableSource? _source;
   PageEditSession? _session;
   ThumbnailCache? _cache;
   PdfFailure? _failure;
@@ -44,6 +49,12 @@ class _PageGridPageState extends State<PageGridPage> {
   void initState() {
     super.initState();
     _job.addListener(_onJobChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (widget.source != null && _source == null) _load(widget.source!);
   }
 
   @override
@@ -81,19 +92,37 @@ class _PageGridPageState extends State<PageGridPage> {
       final picked = await services.importer.pickPdfs(multiple: false);
       if (!mounted || picked.isEmpty) return;
       final doc = picked.first;
-      setState(() {
-        _document = doc;
-        _loading = true;
-      });
+      await _load(EditableSource.imported(
+        file: doc.file,
+        displayName: doc.displayName,
+      ));
+    } on PdfFailure catch (failure) {
+      if (mounted) {
+        setState(() {
+          _failure = failure;
+          _loading = false;
+          _source = null;
+        });
+      }
+    }
+  }
 
-      final info = await services.engine.inspect(doc.file);
+  Future<void> _load(EditableSource source) async {
+    final services = AppServicesScope.of(context);
+    setState(() {
+      _source = source;
+      _loading = true;
+      _failure = null;
+    });
+    try {
+      final info = await services.engine.inspect(source.file);
       if (!mounted) return;
       _session?.dispose();
       _cache?.dispose();
       setState(() {
         _session = PageEditSession(pageCount: info.pageCount)
           ..addListener(_onSessionChanged);
-        _cache = ThumbnailCache(engine: services.engine, file: doc.file);
+        _cache = ThumbnailCache(engine: services.engine, file: source.file);
         _loading = false;
       });
     } on PdfFailure catch (failure) {
@@ -101,7 +130,7 @@ class _PageGridPageState extends State<PageGridPage> {
         setState(() {
           _failure = failure;
           _loading = false;
-          _document = null;
+          _source = null;
         });
       }
     }
@@ -111,17 +140,33 @@ class _PageGridPageState extends State<PageGridPage> {
     if (mounted) setState(() {});
   }
 
-  void _save() {
+  Future<void> _save() async {
     final services = AppServicesScope.of(context);
     final session = _session!;
-    final source = _document!.file;
+    final source = _source!;
     final pages = session.pages;
+
+    // Requirements.md 5.2: replacing is only offered for a document the app
+    // owns, because a picked file is a copy and writing to it would change
+    // nothing the user can see.
+    var target = SaveTarget.newFile;
+    if (source.canReplace) {
+      final chosen = await askSaveTarget(
+        context,
+        documentName: source.displayName,
+        changeSummary: '${pages.length} page'
+            '${pages.length == 1 ? '' : 's'} after your edits.',
+      );
+      if (chosen == null || !mounted) return;
+      target = chosen;
+    }
 
     _job.run((handle) => savePageEdits(
           services: services,
           source: source,
           pages: pages,
           handle: handle,
+          target: target,
           suffix: widget.tool.id == 'extract' ? 'extracted' : 'edited',
         ));
   }

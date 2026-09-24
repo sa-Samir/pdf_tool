@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf_toolbox/core/engine/pdf_failure.dart';
 import 'package:pdf_toolbox/core/files/document_store.dart';
+import 'package:pdf_toolbox/core/files/save_target.dart';
 import 'package:pdf_toolbox/core/jobs/job_controller.dart';
 import 'package:pdf_toolbox/core/services/app_services.dart';
 import 'package:pdf_toolbox/core/util/page_ranges.dart';
@@ -252,7 +253,10 @@ void main() {
 
       await job.run((handle) => savePageEdits(
             services: services,
-            source: source,
+            source: EditableSource.imported(
+              file: source,
+              displayName: 'doc.pdf',
+            ),
             pages: const [
               PageRef(id: 0, sourceIndex: 2),
               PageRef(id: 1, sourceIndex: 0, rotation: 90),
@@ -272,7 +276,10 @@ void main() {
 
       await job.run((handle) => savePageEdits(
             services: services,
-            source: source,
+            source: EditableSource.imported(
+              file: source,
+              displayName: 'doc.pdf',
+            ),
             pages: const [PageRef(id: 0, sourceIndex: 1)],
             handle: handle,
             suffix: 'extracted',
@@ -290,7 +297,10 @@ void main() {
 
       await job.run((handle) => savePageEdits(
             services: services,
-            source: source,
+            source: EditableSource.imported(
+              file: source,
+              displayName: 'doc.pdf',
+            ),
             pages: const [PageRef(id: 0, sourceIndex: 0)],
             handle: handle,
           ));
@@ -307,7 +317,10 @@ void main() {
 
       final running = job.run((handle) => savePageEdits(
             services: services,
-            source: source,
+            source: EditableSource.imported(
+              file: source,
+              displayName: 'doc.pdf',
+            ),
             pages: const [
               PageRef(id: 0, sourceIndex: 0),
               PageRef(id: 1, sourceIndex: 1),
@@ -333,7 +346,10 @@ void main() {
       // expected count, so a mismatch here would mean a corrupted save.
       await job.run((handle) => savePageEdits(
             services: services,
-            source: source,
+            source: EditableSource.imported(
+              file: source,
+              displayName: 'doc.pdf',
+            ),
             pages: const [
               PageRef(id: 0, sourceIndex: 0),
               PageRef(id: 1, sourceIndex: 1),

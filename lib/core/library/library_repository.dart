@@ -51,6 +51,14 @@ abstract interface class LibraryRepository {
 
   Future<LibraryDocument> rename(String id, String name);
 
+  /// Updates an entry after its file was replaced in place, so the size, page
+  /// count and description match what is now on disk.
+  Future<LibraryDocument> refreshAfterReplace(
+    String id, {
+    required String operation,
+    int? pageCount,
+  });
+
   Future<void> setFavorite(String id, bool favorite);
 
   /// Removes the entry and, unless told otherwise, the file it points at.

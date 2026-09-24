@@ -88,28 +88,34 @@ class DocumentStore {
     required String desiredName,
     int? expectedPages,
   }) async {
-    final PdfDocumentInfo info;
-    try {
-      info = await _engine.inspect(temp);
-    } on PdfFailure catch (failure) {
-      await _deleteQuietly(temp);
-      // A result we cannot reopen is our bug, not a damaged input.
-      throw PdfFailure(FailureKind.unknown, cause: failure.cause ?? failure);
-    }
-
-    if (expectedPages != null && info.pageCount != expectedPages) {
-      await _deleteQuietly(temp);
-      throw PdfFailure(
-        FailureKind.unknown,
-        detail: 'expected $expectedPages pages, produced ${info.pageCount}',
-      );
-    }
-
+    await _verify(temp, expectedPages: expectedPages);
     final target = await _uniqueTarget(desiredName);
     try {
       return await temp.rename(target.path);
     } on FileSystemException {
       // Different volume: fall back to copy, then remove the source.
+      final copied = await temp.copy(target.path);
+      await _deleteQuietly(temp);
+      return copied;
+    }
+  }
+
+  /// Puts [temp] in [target]'s place (requirements.md 5.2).
+  ///
+  /// Verified first, then swapped atomically, so an interrupted replace leaves
+  /// the original intact rather than a half-written file where the user's
+  /// document used to be. Only ever called on a file the app owns, and only
+  /// when the user asked for it.
+  Future<File> replace(
+    File temp, {
+    required File target,
+    int? expectedPages,
+  }) async {
+    await _verify(temp, expectedPages: expectedPages);
+    try {
+      return await temp.rename(target.path);
+    } on FileSystemException {
+      // Different volume: copy over it, then drop the temp.
       final copied = await temp.copy(target.path);
       await _deleteQuietly(temp);
       return copied;
@@ -123,6 +129,26 @@ class DocumentStore {
     final dir = await imports();
     final target = await _unique(dir, displayName);
     return source.copy(target.path);
+  }
+
+  /// Refuses a result that cannot be reopened or has the wrong page count,
+  /// and removes it, so a bad output never reaches the user either way.
+  Future<void> _verify(File temp, {int? expectedPages}) async {
+    final PdfDocumentInfo info;
+    try {
+      info = await _engine.inspect(temp);
+    } on PdfFailure catch (failure) {
+      await _deleteQuietly(temp);
+      // A result we cannot reopen is our bug, not a damaged input.
+      throw PdfFailure(FailureKind.unknown, cause: failure.cause ?? failure);
+    }
+    if (expectedPages != null && info.pageCount != expectedPages) {
+      await _deleteQuietly(temp);
+      throw PdfFailure(
+        FailureKind.unknown,
+        detail: 'expected $expectedPages pages, produced ${info.pageCount}',
+      );
+    }
   }
 
   Future<File> _uniqueTarget(String desiredName) async =>

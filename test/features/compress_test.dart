@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf_toolbox/core/engine/compression.dart';
 import 'package:pdf_toolbox/core/engine/pdf_failure.dart';
 import 'package:pdf_toolbox/core/files/document_store.dart';
+import 'package:pdf_toolbox/core/files/save_target.dart';
 import 'package:pdf_toolbox/core/jobs/job_controller.dart';
 import 'package:pdf_toolbox/core/services/app_services.dart';
 import 'package:pdf_toolbox/features/compress/compress_operation.dart';
@@ -70,7 +71,10 @@ void main() {
     final job = JobController<CompressionOutcome>();
     await job.run((handle) async => compressDocument(
           services: services,
-          source: await input(name, 6),
+          source: EditableSource.imported(
+            file: await input(name, 6),
+            displayName: name,
+          ),
           level: level,
           handle: handle,
         ));
@@ -181,7 +185,10 @@ void main() {
       final job = JobController<CompressionOutcome>();
       await job.run((handle) async => compressDocument(
             services: services,
-            source: await input('scan.pdf', 4),
+            source: EditableSource.imported(
+              file: await input('scan.pdf', 4),
+              displayName: 'scan.pdf',
+            ),
             level: CompressionLevel.balanced,
             handle: handle,
           ));
@@ -196,7 +203,10 @@ void main() {
       final job = JobController<CompressionOutcome>();
       final running = job.run((handle) async => compressDocument(
             services: services,
-            source: await input('scan.pdf', 4),
+            source: EditableSource.imported(
+              file: await input('scan.pdf', 4),
+              displayName: 'scan.pdf',
+            ),
             level: CompressionLevel.balanced,
             handle: handle,
           ));
@@ -292,7 +302,10 @@ void main() {
       final job = JobController<CompressionOutcome>();
       await job.run((handle) async => compressDocument(
             services: services,
-            source: await input('scan.pdf', 4),
+            source: EditableSource.imported(
+              file: await input('scan.pdf', 4),
+              displayName: 'scan.pdf',
+            ),
             level: CompressionLevel.balanced,
             handle: handle,
           ));
@@ -306,7 +319,10 @@ void main() {
       final job = JobController<CompressionOutcome>();
       final running = job.run((handle) async => compressDocument(
             services: services,
-            source: await input('scan.pdf', 4),
+            source: EditableSource.imported(
+              file: await input('scan.pdf', 4),
+              displayName: 'scan.pdf',
+            ),
             level: CompressionLevel.balanced,
             handle: handle,
           ));

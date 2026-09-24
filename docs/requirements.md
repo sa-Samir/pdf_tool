@@ -289,7 +289,8 @@ Create, rename, move, delete, favorite, share. Sort by name / date / size. Searc
 
 ### 5.2 Data integrity invariants (non-negotiable)
 
-1. Originals are **never** modified in place. Output is written to a temp path, verified as a parseable PDF with the expected page count, then atomically moved into place.
+1. Output is written to a temp path, verified as a parseable PDF with the expected page count, then atomically moved into place. **A file outside the app is never written to at all**: picked files are copied into the sandbox (§3.3) and the copy is what tools operate on.
+1b. A document the app owns may be **replaced in place, but only on an explicit choice**, offered as "Save as a new file" (the default) or "Replace". The replace runs through the same temp → verify → atomic swap, so an interrupted replace leaves the original intact rather than a half-written file. Replacing is offered only where it is meaningful and honest: the page editor and Compress, on a document opened from the library. It is never offered for an imported copy, where it would overwrite our copy and leave the user's own file untouched.
 2. A failed or cancelled operation leaves no partial output and no orphaned temp files.
 3. Before starting, check free space for at least 2.5× the input size and fail fast with a clear message if unavailable.
 4. Temp files are cleaned on operation completion, on app launch (sweeping anything left by a crash), and on a size ceiling.
