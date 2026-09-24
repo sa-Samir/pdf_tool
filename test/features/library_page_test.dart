@@ -126,6 +126,27 @@ void main() {
     expect(find.text('notes.pdf'), findsNothing);
   });
 
+  testWidgets('a name typed without an extension gets one, as on disk',
+      (tester) async {
+    await pump(tester, sample);
+    await tester.tap(find.byTooltip('More actions for notes.pdf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'notes.pdf'),
+      'Invoice',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
+    await tester.pumpAndSettle();
+
+    // The repository appends .pdf and the file on disk is moved to match, so
+    // the list must show what the document is actually called now.
+    expect(find.text('Invoice.pdf'), findsOneWidget);
+    expect(find.text('Invoice'), findsNothing);
+  });
+
   testWidgets('deleting asks first, and says it cannot be undone',
       (tester) async {
     await pump(tester, sample);

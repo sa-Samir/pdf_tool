@@ -192,6 +192,32 @@ void main() {
       expect(find.text('invoice.pdf'), findsOneWidget);
     });
 
+    testWidgets('a renamed document is copied out under its new name',
+        (tester) async {
+      await pump(tester);
+
+      await tester.tap(find.byTooltip('More actions for invoice.pdf'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Rename'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'invoice.pdf'),
+        'quarterly.pdf',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('More actions for quarterly.pdf'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save to device'));
+      await tester.pumpAndSettle();
+
+      // Renaming moves the file, so the path handed to the exporter has to be
+      // the new one. Resolving the old path would export a file that is no
+      // longer there.
+      expect(exporter.lastCall.single, endsWith('quarterly.pdf'));
+    });
+
     testWidgets('a long press starts a selection', (tester) async {
       await pump(tester);
 

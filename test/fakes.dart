@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:pdf_toolbox/core/engine/pdf_engine.dart';
 import 'package:pdf_toolbox/core/entitlements/entitlements.dart';
 import 'package:pdf_toolbox/core/engine/pdf_failure.dart';
+import 'package:path/path.dart' as p;
 import 'package:pdf_toolbox/core/files/device_exporter.dart';
+import 'package:pdf_toolbox/core/files/document_store.dart' show sanitizeFileName;
 import 'package:pdf_toolbox/core/files/file_importer.dart';
 import 'package:pdf_toolbox/core/images/gallery_saver.dart';
 import 'package:pdf_toolbox/core/images/image_normalizer.dart';
@@ -583,7 +585,27 @@ class FakeLibraryRepository implements LibraryRepository {
   @override
   Future<LibraryDocument> rename(String id, String name) async {
     final index = _documents.indexWhere((d) => d.id == id);
-    final renamed = _documents[index].copyWith(name: name);
+    final existing = _documents[index];
+
+    // Mirrors SqfliteLibraryRepository.rename deliberately: a name with no
+    // extension gains .pdf, separators are stripped, a collision is refused,
+    // and the file moves with the entry so relativePath keeps matching the
+    // name. A fake that skipped any of this would let a test assert a name
+    // the real app never shows, or resolve a path it no longer has.
+    final safeName = sanitizeFileName(
+      p.extension(name).isEmpty ? '$name.pdf' : name,
+    );
+    final directory = p.dirname(existing.relativePath);
+    final relativePath =
+        directory == '.' ? safeName : p.join(directory, safeName);
+
+    if (_documents
+        .any((d) => d.id != id && d.relativePath == relativePath)) {
+      throw StateError('a file called $safeName is already here');
+    }
+
+    final renamed =
+        existing.copyWith(name: safeName, relativePath: relativePath);
     _documents[index] = renamed;
     return renamed;
   }
