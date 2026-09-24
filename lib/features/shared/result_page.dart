@@ -9,6 +9,7 @@ import '../../core/services/app_services.dart';
 import '../../core/theme/app_theme.dart';
 import '../viewer/viewer_page.dart';
 import 'job_views.dart';
+import 'save_to_device.dart';
 import 'undo_replace.dart';
 
 /// Puts back a replaced version. Injected so the card's states can be tested:
@@ -104,23 +105,45 @@ class _ResultPageState extends State<ResultPage> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(Insets.lg),
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(
+                  Insets.lg, Insets.md, Insets.lg, Insets.lg),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context)
-                          .popUntil((route) => route.isFirst),
-                      child: const Text('Done'),
+                  // Given its own full-width row rather than a third seat in
+                  // the one below. Everything this app writes lives in private
+                  // storage and goes when the app is uninstalled, so getting a
+                  // copy out needs to be obvious, not merely possible
+                  // (requirements.md 6).
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.tonalIcon(
+                      onPressed: () => saveToDevice(context, widget.files),
+                      icon: const Icon(Icons.save_alt),
+                      label: Text(widget.files.length == 1
+                          ? 'Save to device'
+                          : 'Save ${widget.files.length} files to device'),
                     ),
                   ),
-                  const SizedBox(width: Insets.md),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () => services.export.share(widget.files),
-                      icon: const Icon(Icons.ios_share),
-                      label: const Text('Share'),
-                    ),
+                  const SizedBox(height: Insets.sm),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(context)
+                              .popUntil((route) => route.isFirst),
+                          child: const Text('Done'),
+                        ),
+                      ),
+                      const SizedBox(width: Insets.md),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () => services.export.share(widget.files),
+                          icon: const Icon(Icons.ios_share),
+                          label: const Text('Share'),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

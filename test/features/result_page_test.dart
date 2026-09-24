@@ -52,7 +52,7 @@ void main() {
           files: [File('/memory/report.pdf')],
           summary: '5 pages saved',
           undo: undo,
-          undoAction: action ?? (_, __) async {},
+          undoAction: action ?? (_, _) async {},
         ),
       ),
     ));
@@ -118,7 +118,7 @@ void main() {
       await pump(
         tester,
         undo: version(),
-        action: (_, __) async => calls++,
+        action: (_, _) async => calls++,
       );
 
       await tester.tap(find.text('Undo'));
@@ -133,7 +133,7 @@ void main() {
       await pump(
         tester,
         undo: version(),
-        action: (_, __) async => throw const FileSystemException('gone'),
+        action: (_, _) async => throw const FileSystemException('gone'),
       );
 
       await tester.tap(find.text('Undo'));

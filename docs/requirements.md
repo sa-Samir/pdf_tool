@@ -38,6 +38,7 @@ Gaps found when auditing v2 against its own change log, plus the items the revie
 | 21 | **Optional biometric app lock** (§8.2, §11) | A privacy-positioned document app that cannot lock its own library is leaving the claim half-built; also covers the app-switcher snapshot. |
 | 22 | **Assumptions, open questions and explicit non-goals** (§20) | Six decisions are currently unmade, one of which (is there a UA budget?) should gate the build itself. Non-goals are written down so they are not re-litigated mid-build. |
 | 23 | **Replacing a document made reversible instead of confirmed** (§5.2.1b–1c) | The first cut asked "new file or replace?" on every save. That taxes the most deliberate user — someone who opened their own document on purpose — every single time, and the prompt had to warn that the old version was "gone for good", which was only true because nothing kept it. Keeping the previous version removes both problems: the common case loses a step, and the destructive case stops being destructive. |
+| 24 | **Save to device built, and the reason for it written down** (§6.1) | §6 always listed "a user-chosen location via the system picker" and it was never built, leaving the share sheet as the only way out of the sandbox. That matters more than a missing menu item: app-private storage is deleted on uninstall, so the library silently doubled as a place to lose work. |
 
 ---
 
@@ -299,11 +300,23 @@ Create, rename, move, delete, favorite, share. Sort by name / date / size. Searc
 3. Before starting, check free space for at least 2.5× the input size and fail fast with a clear message if unavailable.
 4. Temp files are cleaned on operation completion, on app launch (sweeping anything left by a crash), and on a size ceiling.
 5. Saving never silently overwrites: name collisions auto-suffix. The in-place replace of §5.2.1b is not an exception — it is announced on the result screen and reversible per §5.2.1c.
-6. The app never deletes a user's original file. Deletion is always an explicit user action on a file the app owns.
+6. The app never deletes a user's original file. Deletion is always an explicit user action on a file the app owns. Exporting is never such an action: saving to the device copies out and leaves the library untouched (§6.1).
 
 ## 6. Sharing and export
 
 Save (to app folder or a user-chosen location via the system picker) · native share sheet · open in another app · rename · move · print. Registered as a share target and an "Open with" handler for PDFs and images.
+
+### 6.1 Save to device (built)
+
+Everything the app produces lives in **app-private storage**, which the platform deletes when the app is uninstalled. The share sheet could always rescue a file, but nobody reads "share" as "keep this" — so getting a copy out is a first-class action, not a corner of a menu.
+
+1. **Always a copy, never a move.** The library keeps its own file, so a document that has been saved out is still there to work on. Nothing in the app removes a file as a side effect of exporting it (§5.2.6).
+2. **Two entry points, because one is none.** The result screen after any operation, and the Files list — per document via its menu, or several at once by long-pressing to start a selection.
+3. **Streamed, never materialised.** `file_picker`'s `saveFile()` requires the whole file as `bytes`; at the 200 MB input ceiling, that plus the copy a platform channel makes crossing into Kotlin or Swift would breach the 400 MB RSS cap in §13 on exactly the documents most worth rescuing. Both platforms therefore use a small native channel that takes a path: `ACTION_CREATE_DOCUMENT` / `ACTION_OPEN_DOCUMENT_TREE` with `ContentResolver` streams on Android, `UIDocumentPickerViewController(forExporting:asCopy:)` on iOS.
+4. **No storage permission, ever.** The user's choice of destination in the system picker *is* the grant. `MANAGE_EXTERNAL_STORAGE` and broad media permissions are never requested (§8).
+5. **Honest reporting.** A partial save ("Saved 2 of 3 files") is never rounded up to success, a destination the platform does not name is omitted rather than invented, and cancelling the picker is reported as nothing at all, because it is a choice rather than an event.
+
+Acceptance: a document saved out is byte-identical to the one in the library and both still exist; a 200 MB document exports without exceeding the §13 memory cap; cancelling leaves no message and no file; selecting N documents produces exactly N files in one chosen folder.
 
 ## 7. Offline
 

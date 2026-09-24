@@ -1,3 +1,4 @@
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -7,6 +8,7 @@ import '../../core/files/save_target.dart';
 import '../../core/services/app_services.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/job_views.dart';
+import '../shared/save_to_device.dart';
 import '../compress/compress_page.dart';
 import '../pages/page_grid_page.dart';
 import '../viewer/viewer_page.dart';
@@ -32,6 +34,12 @@ class _LibraryPageState extends State<LibraryPage> {
   LibrarySort _sort = LibrarySort.newest;
   bool _favouritesOnly = false;
   String _query = '';
+
+  /// Ids picked for a bulk action. Empty means normal browsing: selection mode
+  /// is a state the list enters by long-press, not a mode toggle to find.
+  final _selected = <String>{};
+
+  bool get _selecting => _selected.isNotEmpty;
 
   @override
   void didChangeDependencies() {
@@ -67,6 +75,42 @@ class _LibraryPageState extends State<LibraryPage> {
         _folders = widget.folder == null
             ? AppServicesScope.of(context).library.folders()
             : Future.value(const <LibraryFolder>[]);
+      });
+
+  /// Copies one document out of the sandbox (requirements.md 6).
+  Future<void> _saveToDevice(LibraryDocument document) async {
+    final services = AppServicesScope.of(context);
+    final file = await services.library.fileFor(document);
+    if (!mounted) return;
+    if (file == null) {
+      _reportMissing();
+      return;
+    }
+    await saveToDevice(context, [file]);
+  }
+
+  /// Copies everything selected out in one go, which is the case that actually
+  /// protects someone against losing the library to an uninstall.
+  Future<void> _saveSelectedToDevice() async {
+    final services = AppServicesScope.of(context);
+    final files = <File>[];
+    for (final id in _selected) {
+      final document = await services.library.byId(id);
+      if (document == null) continue;
+      final file = await services.library.fileFor(document);
+      if (file != null) files.add(file);
+    }
+    if (!mounted) return;
+    if (files.isEmpty) {
+      _reportMissing();
+      return;
+    }
+    await saveToDevice(context, files);
+    if (mounted) setState(_selected.clear);
+  }
+
+  void _toggleSelected(LibraryDocument document) => setState(() {
+        if (!_selected.remove(document.id)) _selected.add(document.id);
       });
 
   Future<void> _share(LibraryDocument document) async {
@@ -288,39 +332,55 @@ class _LibraryPageState extends State<LibraryPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.folder?.name ?? 'Files'),
-        actions: [
-          if (widget.folder == null)
-            IconButton(
-              icon: const Icon(Icons.create_new_folder_outlined),
-              tooltip: 'New folder',
-              onPressed: _newFolder,
+      appBar: _selecting
+          ? AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Cancel selection',
+                onPressed: () => setState(_selected.clear),
+              ),
+              title: Text('${_selected.length} selected'),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.save_alt),
+                  tooltip: 'Save selected to device',
+                  onPressed: _saveSelectedToDevice,
+                ),
+              ],
+            )
+          : AppBar(
+              title: Text(widget.folder?.name ?? 'Files'),
+              actions: [
+                if (widget.folder == null)
+                  IconButton(
+                    icon: const Icon(Icons.create_new_folder_outlined),
+                    tooltip: 'New folder',
+                    onPressed: _newFolder,
+                  ),
+                IconButton(
+                  icon: Icon(_favouritesOnly ? Icons.star : Icons.star_border),
+                  tooltip: _favouritesOnly ? 'Show all' : 'Favourites only',
+                  onPressed: () {
+                    setState(() => _favouritesOnly = !_favouritesOnly);
+                    _reload();
+                  },
+                ),
+                PopupMenuButton<LibrarySort>(
+                  icon: const Icon(Icons.sort),
+                  tooltip: 'Sort',
+                  initialValue: _sort,
+                  onSelected: (value) {
+                    setState(() => _sort = value);
+                    _reload();
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(value: LibrarySort.newest, child: Text('Newest')),
+                    PopupMenuItem(value: LibrarySort.name, child: Text('Name')),
+                    PopupMenuItem(value: LibrarySort.size, child: Text('Size')),
+                  ],
+                ),
+              ],
             ),
-          IconButton(
-            icon: Icon(_favouritesOnly ? Icons.star : Icons.star_border),
-            tooltip: _favouritesOnly ? 'Show all' : 'Favourites only',
-            onPressed: () {
-              setState(() => _favouritesOnly = !_favouritesOnly);
-              _reload();
-            },
-          ),
-          PopupMenuButton<LibrarySort>(
-            icon: const Icon(Icons.sort),
-            tooltip: 'Sort',
-            initialValue: _sort,
-            onSelected: (value) {
-              setState(() => _sort = value);
-              _reload();
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: LibrarySort.newest, child: Text('Newest')),
-              PopupMenuItem(value: LibrarySort.name, child: Text('Name')),
-              PopupMenuItem(value: LibrarySort.size, child: Text('Size')),
-            ],
-          ),
-        ],
-      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -387,6 +447,11 @@ class _LibraryPageState extends State<LibraryPage> {
                             _DocumentTile(
                               document: document,
                               highlighted: document.id == widget.highlightId,
+                              selecting: _selecting,
+                              selected: _selected.contains(document.id),
+                              onToggleSelected: () =>
+                                  _toggleSelected(document),
+                              onSaveToDevice: () => _saveToDevice(document),
                               onOpen: () => _open(document),
                               onShare: () => _share(document),
                               onRename: () => _rename(document),
@@ -429,6 +494,10 @@ class _DocumentTile extends StatelessWidget {
   const _DocumentTile({
     required this.document,
     required this.highlighted,
+    required this.selecting,
+    required this.selected,
+    required this.onToggleSelected,
+    required this.onSaveToDevice,
     required this.onOpen,
     required this.onShare,
     required this.onRename,
@@ -441,6 +510,12 @@ class _DocumentTile extends StatelessWidget {
 
   final LibraryDocument document;
   final bool highlighted;
+
+  /// True while the list is picking documents for a bulk action.
+  final bool selecting;
+  final bool selected;
+  final VoidCallback onToggleSelected;
+  final VoidCallback onSaveToDevice;
   final VoidCallback onOpen;
   final VoidCallback onShare;
   final VoidCallback onRename;
@@ -456,12 +531,23 @@ class _DocumentTile extends StatelessWidget {
     final pages = document.pageCount;
 
     return Card(
-      color: highlighted ? theme.colorScheme.primaryContainer : null,
+      color: switch ((selected, highlighted)) {
+        (true, _) => theme.colorScheme.secondaryContainer,
+        (_, true) => theme.colorScheme.primaryContainer,
+        _ => null,
+      },
       clipBehavior: Clip.antiAlias,
       child: ListTile(
-        onTap: onOpen,
+        // Long-press starts a selection; once one is running, a plain tap
+        // adds to it rather than opening the document out from under it.
+        onTap: selecting ? onToggleSelected : onOpen,
+        onLongPress: onToggleSelected,
         leading: Icon(
-          Icons.picture_as_pdf_outlined,
+          selecting
+              ? (selected
+                  ? Icons.check_circle
+                  : Icons.radio_button_unchecked)
+              : Icons.picture_as_pdf_outlined,
           color: theme.colorScheme.primary,
         ),
         title: Text(
@@ -477,42 +563,47 @@ class _DocumentTile extends StatelessWidget {
           '${formatRelativeTime(document.createdAt)}',
           maxLines: 2,
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: Icon(
-                document.favorite ? Icons.star : Icons.star_border,
-                color: document.favorite ? theme.colorScheme.primary : null,
+        trailing: selecting
+            ? null
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      document.favorite ? Icons.star : Icons.star_border,
+                      color: document.favorite ? theme.colorScheme.primary : null,
+                    ),
+                    tooltip: document.favorite
+                        ? 'Remove ${document.name} from favourites'
+                        : 'Add ${document.name} to favourites',
+                    onPressed: onToggleFavorite,
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'More actions for ${document.name}',
+                    onSelected: (value) => switch (value) {
+                      'pages' => onEditPages(),
+                      'compress' => onCompress(),
+                      'save' => onSaveToDevice(),
+                      'share' => onShare(),
+                      'rename' => onRename(),
+                      'move' => onMove(),
+                      'delete' => onDelete(),
+                      _ => null,
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(value: 'pages', child: Text('Edit pages')),
+                      PopupMenuItem(value: 'compress', child: Text('Compress')),
+                      PopupMenuDivider(),
+                      PopupMenuItem(
+                          value: 'save', child: Text('Save to device')),
+                      PopupMenuItem(value: 'share', child: Text('Share')),
+                      PopupMenuItem(value: 'rename', child: Text('Rename')),
+                      PopupMenuItem(value: 'move', child: Text('Move to folder')),
+                      PopupMenuItem(value: 'delete', child: Text('Delete')),
+                    ],
+                  ),
+                ],
               ),
-              tooltip: document.favorite
-                  ? 'Remove ${document.name} from favourites'
-                  : 'Add ${document.name} to favourites',
-              onPressed: onToggleFavorite,
-            ),
-            PopupMenuButton<String>(
-              tooltip: 'More actions for ${document.name}',
-              onSelected: (value) => switch (value) {
-                'pages' => onEditPages(),
-                'compress' => onCompress(),
-                'share' => onShare(),
-                'rename' => onRename(),
-                'move' => onMove(),
-                'delete' => onDelete(),
-                _ => null,
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'pages', child: Text('Edit pages')),
-                PopupMenuItem(value: 'compress', child: Text('Compress')),
-                PopupMenuDivider(),
-                PopupMenuItem(value: 'share', child: Text('Share')),
-                PopupMenuItem(value: 'rename', child: Text('Rename')),
-                PopupMenuItem(value: 'move', child: Text('Move to folder')),
-                PopupMenuItem(value: 'delete', child: Text('Delete')),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }

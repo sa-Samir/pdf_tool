@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:pdf_toolbox/core/engine/pdf_engine.dart';
 import 'package:pdf_toolbox/core/entitlements/entitlements.dart';
 import 'package:pdf_toolbox/core/engine/pdf_failure.dart';
+import 'package:pdf_toolbox/core/files/device_exporter.dart';
 import 'package:pdf_toolbox/core/files/file_importer.dart';
 import 'package:pdf_toolbox/core/images/gallery_saver.dart';
 import 'package:pdf_toolbox/core/images/image_normalizer.dart';
@@ -766,6 +767,29 @@ class FakeEntitlements implements Entitlements {
     if (isPremium) return;
     _used[toolId] = ((_used[toolId] ?? 0) - 1).clamp(0, 1 << 30);
     _notifier.ping();
+  }
+}
+
+/// Records what was asked to be saved out, and answers however a test needs.
+class FakeDeviceExporter implements DeviceExporter {
+  FakeDeviceExporter({this.result, this.isSupported = true});
+
+  /// What [save] returns. Defaults to saving everything it was handed.
+  DeviceSaveResult? result;
+
+  @override
+  final bool isSupported;
+
+  /// Every batch handed to [save], in order.
+  final calls = <List<String>>[];
+
+  List<String> get lastCall => calls.last;
+
+  @override
+  Future<DeviceSaveResult> save(List<File> files) async {
+    calls.add([for (final f in files) f.path]);
+    return result ??
+        DeviceSaveResult(DeviceSaveStatus.saved, savedCount: files.length);
   }
 }
 

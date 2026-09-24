@@ -61,6 +61,16 @@ Phase 1 foundation and the first two tools (roadmap.md 5, 7).
   tool, counted in the database, plus the merge, image-count and DPI caps the
   cards advertise. A run is spent only when a result is kept and it genuinely
   helped.
+- **Save to device**: copies a finished document out to wherever you choose,
+  from the result screen or from Files — one document via its menu, or several
+  at once by long-pressing to start a selection. Always a copy: the library
+  keeps its own file. This exists because app-private storage is deleted on
+  uninstall, so without it the Files screen quietly doubles as a place to lose
+  work. Uses a small native channel on each platform rather than
+  `file_picker`'s `saveFile()`, whose required `bytes` parameter would hold a
+  whole 200 MB document in memory and breach the memory cap in requirements
+  §13; both sides stream from a path instead, and neither asks for a storage
+  permission.
 - **Library**: a local SQLite record of everything the app produces, wired into
   every save. Recents on the home screen, a Files screen with search, sort and
   favourites, rename/share/delete, retention, and clear-history in Settings.
