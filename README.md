@@ -7,6 +7,7 @@ runs locally, there is no account, and the app works in airplane mode.
 
 | Document | What it covers |
 |---|---|
+| [docs/architecture.md](docs/architecture.md) | **Start here to work on the code.** Architecture, the rules that explain the design, subsystem reference, how to add a tool, testing, build traps. |
 | [docs/requirements.md](docs/requirements.md) | Product requirements (v2.1). Features, tiers, privacy, error taxonomy, performance targets. |
 | [docs/feasibility.md](docs/feasibility.md) | Per-feature technical feasibility, library and licensing decisions, effort model, risk register. |
 | [docs/roadmap.md](docs/roadmap.md) | Phased development plan with gates, staffing scenarios and the non-engineering track. |
