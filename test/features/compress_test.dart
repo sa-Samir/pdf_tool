@@ -282,6 +282,8 @@ void main() {
   });
 
   group('free runs', () {
+    enforceFreeTier();
+
     test('keeping a real saving spends one free run', () async {
       engine.compressionRatio = 0.25;
       final outcome = await run();

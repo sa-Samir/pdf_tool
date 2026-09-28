@@ -17,8 +17,8 @@ class AppSettings extends ChangeNotifier {
 
   /// Looks up the [AppSettings] above [context].
   static AppSettings of(BuildContext context) {
-    final scope =
-        context.dependOnInheritedWidgetOfExactType<AppSettingsScope>();
+    final scope = context
+        .dependOnInheritedWidgetOfExactType<AppSettingsScope>();
     assert(scope != null, 'No AppSettingsScope found above this widget.');
     return scope!.notifier!;
   }

@@ -6,6 +6,8 @@ import 'package:pdf_toolbox/core/services/app_services.dart';
 import 'package:pdf_toolbox/features/merge/merge_page.dart';
 import 'package:pdf_toolbox/features/split/split_page.dart';
 
+import 'package:pdf_toolbox/core/entitlements/tool_limits.dart';
+
 import '../fakes.dart';
 
 /// Widget tests cover what the screens show and enable. Running an operation
@@ -106,6 +108,44 @@ void main() {
 
       expect(find.text('b.pdf'), findsNothing);
       expect(find.text('Merge 2 files'), findsOneWidget);
+    });
+
+    testWidgets('no cap applies while the free tier is switched off',
+        (tester) async {
+      // Five files, against a free cap of three. With ToolLimits.enforced
+      // false every one of them has to be accepted, and nothing may claim a
+      // limit was hit.
+      services = build({
+        for (var i = 0; i < 5; i++) '/memory/f$i.pdf': 1,
+      });
+      importer.queued.add([
+        for (var i = 0; i < 5; i++) memoryDocument('f$i.pdf'),
+      ]);
+      await pump(tester, const MergePage());
+      await tester.tap(find.text('Choose PDFs'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Merge 5 files'), findsOneWidget);
+      expect(find.textContaining('free version merges up to'), findsNothing);
+    });
+
+    testWidgets('the cap is real once the free tier is switched on',
+        (tester) async {
+      ToolLimits.enforced = true;
+      addTearDown(() => ToolLimits.enforced = false);
+
+      services = build({
+        for (var i = 0; i < 5; i++) '/memory/f$i.pdf': 1,
+      });
+      importer.queued.add([
+        for (var i = 0; i < 5; i++) memoryDocument('f$i.pdf'),
+      ]);
+      await pump(tester, const MergePage());
+      await tester.tap(find.text('Choose PDFs'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Merge 3 files'), findsOneWidget);
+      expect(find.textContaining('free version merges up to'), findsOneWidget);
     });
 
     testWidgets('an import failure is explained, keeping the screen',

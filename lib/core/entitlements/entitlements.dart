@@ -15,10 +15,16 @@ class ToolAllowance {
   final int used;
   final bool isPremium;
 
-  int get remaining =>
-      isPremium ? ToolLimits.freeTrialUses : (ToolLimits.freeTrialUses - used).clamp(0, ToolLimits.freeTrialUses);
+  int get remaining => isUnrestricted
+      ? ToolLimits.freeTrialUses
+      : (ToolLimits.freeTrialUses - used)
+          .clamp(0, ToolLimits.freeTrialUses);
 
-  bool get canUse => isPremium || remaining > 0;
+  /// True when no limit applies: either the free tier is switched off
+  /// altogether, or this user has bought premium.
+  bool get isUnrestricted => !ToolLimits.enforced || isPremium;
+
+  bool get canUse => isUnrestricted || remaining > 0;
 
   bool get isExhausted => !canUse;
 }
@@ -48,4 +54,13 @@ abstract interface class Entitlements {
 
   /// Rebuilds anything showing a count.
   Listenable get changes;
+}
+
+/// Whether any limit applies right now (requirements.md 9).
+///
+/// One predicate for every caller, so switching the free tier off cannot be
+/// half-applied: a tool that still capped its input while the wall was down
+/// would be the same class of drift the limits table exists to prevent.
+extension EntitlementGate on Entitlements {
+  bool get isUnrestricted => !ToolLimits.enforced || isPremium;
 }

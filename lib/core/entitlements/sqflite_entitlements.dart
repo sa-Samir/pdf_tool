@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'entitlements.dart';
+import 'tool_limits.dart';
 
 /// Entitlements backed by the app's own database.
 ///
@@ -54,7 +55,9 @@ class SqfliteEntitlements implements Entitlements {
 
   @override
   Future<void> recordUse(String toolId) async {
-    if (_isPremium) return;
+    // Nothing is counted while the free tier is off, so flipping it back on
+    // starts from zero rather than from however much testing happened.
+    if (!ToolLimits.enforced || _isPremium) return;
     final db = await _db;
     // One statement, so two operations finishing together cannot both read
     // the same count and write the same value back.
@@ -68,7 +71,7 @@ class SqfliteEntitlements implements Entitlements {
 
   @override
   Future<void> refundUse(String toolId) async {
-    if (_isPremium) return;
+    if (!ToolLimits.enforced || _isPremium) return;
     final db = await _db;
     // MAX guards the floor inside the statement, so a refund that races
     // another cannot drive the count negative.

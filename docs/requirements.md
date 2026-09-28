@@ -40,6 +40,7 @@ Gaps found when auditing v2 against its own change log, plus the items the revie
 | 23 | **Replacing a document made reversible instead of confirmed** (§5.2.1b–1c) | The first cut asked "new file or replace?" on every save. That taxes the most deliberate user — someone who opened their own document on purpose — every single time, and the prompt had to warn that the old version was "gone for good", which was only true because nothing kept it. Keeping the previous version removes both problems: the common case loses a step, and the destructive case stops being destructive. |
 | 24 | **Save to device built, and the reason for it written down** (§6.1) | §6 always listed "a user-chosen location via the system picker" and it was never built, leaving the share sheet as the only way out of the sandbox. That matters more than a missing menu item: app-private storage is deleted on uninstall, so the library silently doubled as a place to lose work. |
 | 25 | **Print built on the platform print systems, not a package** (§6.2) | The last of §6's actions. `printing` would have added a dependency whose layout callback takes the whole document as bytes — the same §13 breach as `file_picker.saveFile()`. Android's PrintDocumentAdapter and iOS's UIPrintInteractionController both take a descriptor or a URL, so neither needs the bytes. |
+| 26 | **Free tier put behind a single switch, currently off** (§9) | Every limit ran through `entitlements.isPremium`, so the app could enforce a tier it had nothing to sell for. One flag now gates enforcement, advertising and counting together, via one `isUnrestricted` predicate — a tool that still capped its input while the wall was down would be exactly the drift the limits table exists to prevent. |
 
 ---
 
@@ -361,6 +362,10 @@ Documented exceptions, which must be surfaced in the UI rather than discovered b
 ## 9. Monetization
 
 Freemium with a hard-gated premium tier. **No daily counters and no watermark on user output** — see §0 item 6.
+
+> **Switched off in the current build.** `ToolLimits.enforced` is `false`, so every tool below is unlimited, no card advertises a cap, and no use is counted. There is nothing to buy behind the wall yet, so a wall would only be in the way. The rest of this section describes what the switch turns back on.
+>
+> Nothing is recorded while it is off, so flipping it to `true` starts every counter from zero rather than charging the user for testing. The enforced behaviour stays covered by tests that set the flag (`enforceFreeTier()`), because this tier was once advertised and never applied — a defect that only surfaced when a user hit it.
 
 **Free, unlimited**
 Viewer · Merge (up to 3 files) · Split · Rotate / Delete / Reorder / Extract / Duplicate · Images → PDF (up to 10 images) · PDF → Images at up to 150 DPI · Recents and folders

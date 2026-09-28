@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/engine/pdf_failure.dart';
 import '../../core/entitlements/tool_limits.dart';
+import '../../core/entitlements/entitlements.dart';
 import '../../core/files/file_importer.dart';
 import '../../core/images/gallery_saver.dart';
 import '../../core/jobs/job_controller.dart';
@@ -270,7 +271,9 @@ class _PdfToImagesPageState extends State<PdfToImagesPage> {
                 enabled: !running,
                 // Requirements.md 9: 300 dpi is premium, and the card says so.
                 isLocked: (v) =>
-                    !AppServicesScope.of(context).entitlements.isPremium &&
+                    !AppServicesScope.of(context)
+                        .entitlements
+                        .isUnrestricted &&
                     v.dpi > ToolLimits.maxFreeDpi,
                 onChanged: (v) {
                   setState(() => _dpi = v);

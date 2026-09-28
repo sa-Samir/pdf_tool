@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/engine/pdf_failure.dart';
 import '../../core/entitlements/tool_limits.dart';
+import '../../core/entitlements/entitlements.dart';
 import '../../core/images/image_normalizer.dart';
 import '../../core/images/page_layout.dart';
 import '../../core/jobs/job_controller.dart';
@@ -68,7 +69,7 @@ class _ImagesToPdfPageState extends State<ImagesToPdfPage> {
       final picked = await services.importer.pickImages();
       if (!mounted || picked.isEmpty) return;
 
-      final room = services.entitlements.isPremium
+      final room = services.entitlements.isUnrestricted
           ? picked.length
           : (ToolLimits.imagesToPdfFreeImages - _images.length)
               .clamp(0, picked.length);

@@ -265,6 +265,8 @@ void main() {
   });
 
   group('compress', () {
+    enforceFreeTier();
+
     Future<CompressionOutcome> compress(EditableSource source,
         {double ratio = 0.25}) async {
       engine.compressionRatio = ratio;

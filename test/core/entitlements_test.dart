@@ -8,7 +8,11 @@ import 'package:pdf_toolbox/core/entitlements/tool_limits.dart';
 import 'package:pdf_toolbox/core/library/sqflite_library_repository.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../fakes.dart';
+
 void main() {
+  enforceFreeTier();
+
   sqfliteFfiInit();
   databaseFactory = databaseFactoryFfi;
 

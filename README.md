@@ -57,10 +57,13 @@ Phase 1 foundation and the first two tools (roadmap.md 5, 7).
   and the result screen offers it back, restoring the content, the library
   entry, and any free run the operation spent. Revisions are bounded (7 days,
   20 most recent) and swept at launch.
-- **Free-tier limits**, actually enforced: three lifetime runs per premium
-  tool, counted in the database, plus the merge, image-count and DPI caps the
-  cards advertise. A run is spent only when a result is kept and it genuinely
-  helped.
+- **Free-tier limits** behind a single switch, **currently off**
+  (`ToolLimits.enforced = false`). Every tool is unlimited, no card advertises
+  a cap, and nothing is counted — so flipping the switch back on starts from
+  zero instead of charging for testing. When on: three lifetime runs per
+  premium tool, counted in the database, plus the merge, image-count and DPI
+  caps the cards advertise, with a run spent only when a result is kept and it
+  genuinely helped. Both states are tested.
 - **Save to device**: copies a finished document out to wherever you choose,
   from the result screen or from Files — one document via its menu, or several
   at once by long-pressing to start a selection. Always a copy: the library

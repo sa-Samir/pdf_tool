@@ -271,7 +271,7 @@ class _CompressPageState extends State<CompressPage> {
             onPressed: _run,
             child: const Text('Compress'),
           ),
-          if (allowance != null && !allowance.isPremium) ...[
+          if (allowance != null && !allowance.isUnrestricted) ...[
             const SizedBox(height: Insets.sm),
             Center(child: RemainingUses(remaining: allowance.remaining)),
           ],

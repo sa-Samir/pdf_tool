@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/engine/pdf_failure.dart';
 import '../../core/entitlements/tool_limits.dart';
+import '../../core/entitlements/entitlements.dart';
 import '../../core/files/file_importer.dart';
 import '../../core/jobs/job_controller.dart';
 import '../../core/services/app_services.dart';
@@ -77,8 +78,7 @@ class _MergePageState extends State<MergePage> {
 
       // Requirements.md 9: the free tier merges up to three files, and the
       // card says so, so the limit has to be real.
-      final isPremium = services.entitlements.isPremium;
-      final room = isPremium
+      final room = services.entitlements.isUnrestricted
           ? picked.length
           : (ToolLimits.mergeFreeFiles - _documents.length)
               .clamp(0, picked.length);

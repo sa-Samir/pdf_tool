@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/entitlements/entitlements.dart';
+import '../../../core/entitlements/tool_limits.dart';
 import '../../../core/models/pdf_tool.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
@@ -38,8 +39,12 @@ class ToolCard extends StatelessWidget {
     // Requirements.md 3.1: the tier is shown only where a limit applies, so a
     // free tool is never mistaken for a premium one. For a premium tool the
     // number shown is the real remaining count, not a fixed label.
-    final note = tool.tierNote ??
-        (tool.tier == ToolTier.premium ? _premiumNote() : null);
+    // Nothing advertises a cap that is not being applied: while the free
+    // tier is switched off the cards state no limit at all.
+    final note = !ToolLimits.enforced
+        ? null
+        : tool.tierNote ??
+            (tool.tier == ToolTier.premium ? _premiumNote() : null);
 
     return Semantics(
       button: true,

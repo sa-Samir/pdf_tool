@@ -173,34 +173,55 @@ void main() {
       expect(find.text('Secure'), findsNothing);
     });
 
-    testWidgets('states a limit only where one applies', (tester) async {
-      await _pumpHome(tester);
-      await tester.pumpAndSettle();
-
-      expect(find.text('Up to 3 files'), findsOneWidget); // Merge
-      // The premium card shows what is actually left, not a fixed label.
-      expect(find.text('3 free runs left'), findsOneWidget); // Compress
-    });
-
-    testWidgets('a premium card counts down as runs are spent',
+    testWidgets('no card states a limit while the free tier is off',
         (tester) async {
       await _pumpHome(tester);
       await tester.pumpAndSettle();
-      expect(find.text('3 free runs left'), findsOneWidget);
 
-      await entitlements.recordUse('compress');
-      await _pumpHome(tester, withEntitlements: entitlements);
-      await tester.pumpAndSettle();
-      expect(find.text('2 free runs left'), findsOneWidget);
+      // ToolLimits.enforced is false, so advertising a cap would promise
+      // something the app is not doing.
+      expect(find.text('Up to 3 files'), findsNothing);
+      expect(find.text('Up to 10 images'), findsNothing);
+      expect(find.textContaining('free runs left'), findsNothing);
+      expect(find.text('Free runs used'), findsNothing);
+
+      // The tools are all still there and still open.
+      expect(find.text('Merge'), findsOneWidget);
+      expect(find.text('Compress'), findsOneWidget);
     });
 
-    testWidgets('an exhausted premium card says so', (tester) async {
-      final spent = FakeEntitlements(used: const {'compress': 3});
-      await _pumpHome(tester, withEntitlements: spent);
-      await tester.pumpAndSettle();
+    group('with the free tier switched on', () {
+      enforceFreeTier();
 
-      expect(find.text('Free runs used'), findsOneWidget);
-      expect(find.textContaining('free runs left'), findsNothing);
+      testWidgets('states a limit only where one applies', (tester) async {
+        await _pumpHome(tester);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Up to 3 files'), findsOneWidget); // Merge
+        // The premium card shows what is actually left, not a fixed label.
+        expect(find.text('3 free runs left'), findsOneWidget); // Compress
+      });
+
+      testWidgets('a premium card counts down as runs are spent',
+          (tester) async {
+        await _pumpHome(tester);
+        await tester.pumpAndSettle();
+        expect(find.text('3 free runs left'), findsOneWidget);
+
+        await entitlements.recordUse('compress');
+        await _pumpHome(tester, withEntitlements: entitlements);
+        await tester.pumpAndSettle();
+        expect(find.text('2 free runs left'), findsOneWidget);
+      });
+
+      testWidgets('an exhausted premium card says so', (tester) async {
+        final spent = FakeEntitlements(used: const {'compress': 3});
+        await _pumpHome(tester, withEntitlements: spent);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Free runs used'), findsOneWidget);
+        expect(find.textContaining('free runs left'), findsNothing);
+      });
     });
 
     testWidgets('lists recent documents once they load', (tester) async {

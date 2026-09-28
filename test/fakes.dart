@@ -3,8 +3,10 @@ import 'dart:io';
 
 import 'package:pdf_toolbox/core/engine/compression.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf_toolbox/core/engine/pdf_engine.dart';
 import 'package:pdf_toolbox/core/entitlements/entitlements.dart';
+import 'package:pdf_toolbox/core/entitlements/tool_limits.dart';
 import 'package:pdf_toolbox/core/engine/pdf_failure.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdf_toolbox/core/files/device_exporter.dart';
@@ -17,6 +19,17 @@ import 'package:pdf_toolbox/core/jobs/cancel_token.dart';
 import 'package:pdf_toolbox/core/library/library_document.dart';
 import 'package:pdf_toolbox/core/library/library_repository.dart';
 import 'package:pdf_toolbox/core/pages/page_edit_session.dart';
+
+/// Runs the enclosing tests with the free tier switched on.
+///
+/// Enforcement is off in the shipped build (ToolLimits.enforced), but the
+/// behaviour behind the switch still has to be covered: it was advertised and
+/// never applied once already, and that only surfaced because a user hit it.
+/// These tests are what makes flipping the switch back safe.
+void enforceFreeTier() {
+  setUp(() => ToolLimits.enforced = true);
+  tearDown(() => ToolLimits.enforced = false);
+}
 
 /// A stand-in engine backed by tiny text files of the form `PAGES:n`.
 ///
@@ -780,14 +793,14 @@ class FakeEntitlements implements Entitlements {
 
   @override
   Future<void> recordUse(String toolId) async {
-    if (isPremium) return;
+    if (!ToolLimits.enforced || isPremium) return;
     _used[toolId] = (_used[toolId] ?? 0) + 1;
     _notifier.ping();
   }
 
   @override
   Future<void> refundUse(String toolId) async {
-    if (isPremium) return;
+    if (!ToolLimits.enforced || isPremium) return;
     _used[toolId] = ((_used[toolId] ?? 0) - 1).clamp(0, 1 << 30);
     _notifier.ping();
   }

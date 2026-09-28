@@ -135,6 +135,8 @@ void main() {
   });
 
   group('free runs', () {
+    enforceFreeTier();
+
     testWidgets('shows how many free runs are left', (tester) async {
       services = build(used: 1);
       await choose(tester);
