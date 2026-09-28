@@ -17,6 +17,7 @@ import '../files/file_importer.dart';
 import '../images/gallery_saver.dart';
 import '../images/image_normalizer.dart';
 import '../library/library_repository.dart';
+import '../scan/document_scanner.dart';
 import '../library/sqflite_library_repository.dart';
 import 'package:sqflite/sqflite.dart' show Database;
 
@@ -32,6 +33,7 @@ class AppServices {
     required this.export,
     required this.deviceExport,
     required this.printer,
+    required this.scanner,
     required this.library,
     required this.images,
     required this.gallery,
@@ -46,6 +48,7 @@ class AppServices {
     ExportService export = const ExportService(),
     DeviceExporter deviceExport = const PlatformDeviceExporter(),
     DocumentPrinter printer = const PlatformDocumentPrinter(),
+    DocumentScanner scanner = const PlatformDocumentScanner(),
     ImageNormalizer images = const PlatformImageNormalizer(),
     GallerySaver gallery = const PlatformGallerySaver(),
     Entitlements? entitlements,
@@ -64,6 +67,7 @@ class AppServices {
       export: export,
       deviceExport: deviceExport,
       printer: printer,
+      scanner: scanner,
       images: images,
       gallery: gallery,
       entitlements:
@@ -93,6 +97,10 @@ class AppServices {
 
   /// Sends a document to the platform print system (requirements.md 6).
   final DocumentPrinter printer;
+
+  /// Captures paper through the platform document scanners
+  /// (requirements.md 3.10).
+  final DocumentScanner scanner;
   final FileImporter importer;
   final LibraryRepository library;
   final ImageNormalizer images;

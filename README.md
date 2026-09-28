@@ -75,6 +75,12 @@ Phase 1 foundation and the first two tools (roadmap.md 5, 7).
   whole 200 MB document in memory and breach the memory cap in requirements
   §13; both sides stream from a path instead, and neither asks for a storage
   permission.
+- **Document scanner**: capture paper with the camera — VisionKit on iOS, ML
+  Kit on Android. Availability is checked as the home screen loads and the card
+  starts hidden and appears, never the reverse, because the Android scanner is
+  simply absent without Google Play services. Captured pages go straight into
+  the Images to PDF screen to reorder, rotate, drop a page and save, so a scan
+  is ordinary images the moment it comes back.
 - **Print**: from the viewer's app bar or a document's menu in Files. The file
   is streamed to the platform print system rather than re-rendered — Android
   writes into the print framework's descriptor, iOS takes a file URL — so a

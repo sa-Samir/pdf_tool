@@ -21,10 +21,10 @@ library is a local SQLite database, and why several things that would be
 trivial server-side (OCR, heavy compression) are hard here.
 
 **Shipped in v1.0:** Viewer · Merge · Split · Rotate / Delete / Reorder /
-Extract / Duplicate pages · Compress · Images → PDF · PDF → Images · Library
-with folders · Save to device · Print.
+Extract / Duplicate pages · Compress · Images → PDF · PDF → Images · Document
+scanner · Library with folders · Save to device · Print.
 
-**Deliberately not shipped yet:** scanner, annotations, signature, watermark,
+**Deliberately not shipped yet:** annotations, signature, watermark,
 protect/unlock, OCR. They are in the catalog but filtered out of the UI — see
 `kShippedThrough` in [`lib/core/models/pdf_tool.dart`](../lib/core/models/pdf_tool.dart).
 
@@ -188,6 +188,7 @@ Anything that touches the platform gets three pieces:
 | `FileImporter` | `SystemFileImporter` | `FakeFileImporter` |
 | `DeviceExporter` | `PlatformDeviceExporter` | `FakeDeviceExporter` |
 | `DocumentPrinter` | `PlatformDocumentPrinter` | `FakeDocumentPrinter` |
+| `DocumentScanner` | `PlatformDocumentScanner` | `FakeDocumentScanner` |
 | `GallerySaver` | `PlatformGallerySaver` | `FakeGallerySaver` |
 | `ImageNormalizer` | `PlatformImageNormalizer` | `FakeImageNormalizer` |
 | `LibraryRepository` | `SqfliteLibraryRepository` | `FakeLibraryRepository` |
@@ -387,14 +388,35 @@ exceptions. `JobHandle` gives the operation `cancel` (a `CancelToken`) and
 Operations call `handle.cancel.throwIfCancelled()` at checkpoints. Cancellation
 is reported as `cancelled`, not `failure` — it is not an error and costs nothing.
 
+### Document scanner
+
+[`lib/core/scan/document_scanner.dart`](../lib/core/scan/document_scanner.dart),
+[`lib/features/scan/scan_flow.dart`](../lib/features/scan/scan_flow.dart)
+
+The only tool whose **existence** is a runtime question. `isAvailable()` is
+asked as the home screen loads; the card starts hidden and appears, never the
+reverse, because on Android the scanner ships with Google Play services and is
+genuinely absent without them (requirements.md §3.10).
+
+Captured pages become `PickedImage`s and flow into the Images → PDF screen, so
+there is one review-and-save pipeline rather than two. `ImageSource` carries
+the differences: title, wording, and how the library records the result.
+
+`scan()` takes **no output directory** on purpose. The platform writes into its
+own cache (wiped at the start of every capture) and returns paths plus byte
+sizes. Choosing a directory in Dart means file I/O between the tap and the
+camera, which never completes in a widget test's fake-async zone — that was
+built the wrong way round first and a widget test caught it.
+
 ### Native channels
 
-Two MethodChannels, both taking a **path** and streaming, never bytes:
+Three MethodChannels, all taking or returning **paths**, never bytes:
 
 | Channel | Android | iOS |
 |---|---|---|
 | `com.samir.pdf_toolbox/device_export` | `ACTION_CREATE_DOCUMENT` (one file) / `ACTION_OPEN_DOCUMENT_TREE` (several) + `ContentResolver` streams | `UIDocumentPickerViewController(forExporting:asCopy:)` |
 | `com.samir.pdf_toolbox/print` | `PrintManager` + a `PrintDocumentAdapter` writing into the framework's `ParcelFileDescriptor` | `UIPrintInteractionController` with `printingItem` = file URL |
+| `com.samir.pdf_toolbox/scan` | ML Kit `GmsDocumentScanning` via Play services | VisionKit `VNDocumentCameraViewController` |
 
 Android: [`MainActivity.kt`](../android/app/src/main/kotlin/com/samir/pdf_toolbox/MainActivity.kt).
 iOS: [`DeviceExportHandler.swift`](../ios/Runner/DeviceExportHandler.swift) (holds
@@ -572,6 +594,11 @@ body. This has appeared twice.
 during teardown while the dialog is still animating out. Dialogs own their
 controllers here (`_RenameDialog`, `_NameDialog`).
 
+**A `try`/`finally` around a workspace must `await` what it returns.**
+`return store.replace(...)` inside a `try` lets the `finally` dispose the
+workspace while the operation is still reading it. It fails roughly one run in
+four, which reads as a flaky suite rather than a bug.
+
 **Android's `ACTION_OPEN_DOCUMENT_TREE`** cannot grant the Download folder, the
 internal-storage root, or `Android/data` (Android 11+). The picker resumes where
 it was last used, so without `EXTRA_INITIAL_URI` it routinely opens on a folder
@@ -592,6 +619,7 @@ whose confirm button is greyed out.
 | `lib/core/jobs/job_controller.dart` | progress, cancellation, error mapping |
 | `lib/core/catalog/tool_catalog.dart` | the tool list and search aliases |
 | `lib/features/shared/result_page.dart` | the terminal screen for every tool |
+| `lib/features/scan/scan_flow.dart` | scanner capture, page cap, wording |
 | `test/fakes.dart` | every fake, plus `enforceFreeTier()` |
 | `test/integration/real_engine_test.dart` | the only tests using real Rust |
 | `android/app/src/main/kotlin/.../MainActivity.kt` | export + print channels |
@@ -601,7 +629,9 @@ whose confirm button is greyed out.
 
 ## 14. Known gaps
 
-- **iOS is uncompiled** since the native channels landed. Biggest untested surface.
+- **iOS is uncompiled** since the native channels landed — save-to-device, print and now the scanner. Biggest untested surface.
+- **The scanner has not run on a device.** ML Kit's module download on first use, and the capture itself, are unverified.
+- **App size is at 33.5 MB** against a 35 MB budget per ABI (§13). ML Kit added ~0.7 MB; headroom is now thin.
 - **Per-image crop** (§3.8) deferred; rotation is built.
 - **"Open in another app"** and share-target / "Open with" registration (§6) unbuilt.
 - **Phase 4 onward** — IAP and paywall, ads and consent, analytics, crash

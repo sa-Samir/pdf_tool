@@ -19,12 +19,15 @@ import 'fakes.dart';
 
 late FakeLibraryRepository library;
 late FakeEntitlements entitlements;
+late FakeDocumentScanner scanner;
 
 AppServices _services({FakeEntitlements? withEntitlements}) {
   final engine = MemoryFakeEngine(const {});
   library = FakeLibraryRepository();
   entitlements = withEntitlements ?? FakeEntitlements();
+  scanner = FakeDocumentScanner(available: false);
   return AppServices(
+    scanner: scanner,
     engine: engine,
     store: DocumentStore(engine: engine),
     importer: FakeFileImporter([]),
@@ -39,12 +42,15 @@ Widget _host(
   List<LibraryDocument> recents = const [],
   Duration listDelay = Duration.zero,
   FakeEntitlements? withEntitlements,
+  bool scannerAvailable = false,
 }) {
   final engine = MemoryFakeEngine(const {});
   library = FakeLibraryRepository(recents)..listDelay = listDelay;
   entitlements = withEntitlements ?? FakeEntitlements();
+  scanner = FakeDocumentScanner(available: scannerAvailable);
   return AppServicesScope(
     services: AppServices(
+      scanner: scanner,
       engine: engine,
       store: DocumentStore(engine: engine),
       importer: FakeFileImporter([]),
@@ -64,6 +70,7 @@ Future<void> _pumpHome(
   List<LibraryDocument> recents = const [],
   Duration listDelay = Duration.zero,
   FakeEntitlements? withEntitlements,
+  bool scannerAvailable = false,
 }) async {
   tester.view.physicalSize = const Size(1200, 3000);
   tester.view.devicePixelRatio = 2;
@@ -74,6 +81,7 @@ Future<void> _pumpHome(
     recents: recents,
     listDelay: listDelay,
     withEntitlements: withEntitlements,
+    scannerAvailable: scannerAvailable,
   ));
 }
 
@@ -83,8 +91,9 @@ void main() {
       final shipped = ToolCatalog.shipped.map((t) => t.id).toSet();
       expect(shipped, contains('merge'));
       expect(shipped, contains('compress'));
+      expect(shipped, contains('scan'));
       // requirements.md 3.1: unshipped tools are not displayed at all.
-      expect(shipped, isNot(contains('scan')));
+      expect(shipped, isNot(contains('signature')));
       expect(shipped, isNot(contains('protect')));
       expect(shipped, isNot(contains('annotate')));
     });
@@ -221,6 +230,78 @@ void main() {
 
         expect(find.text('Free runs used'), findsOneWidget);
         expect(find.textContaining('free runs left'), findsNothing);
+      });
+    });
+
+    group('the scanner', () {
+      testWidgets('is hidden on a device that cannot scan', (tester) async {
+        await _pumpHome(tester);
+        await tester.pumpAndSettle();
+
+        // requirements.md 3.10: the Android scanner is simply absent without
+        // Google Play services. Offering it and failing at the camera would be
+        // worse than never offering it.
+        expect(find.text('Scan document'), findsNothing);
+        expect(find.text('Capture'), findsNothing,
+            reason: 'its group is empty, so the heading goes too');
+        expect(scanner.availabilityChecks, greaterThan(0));
+      });
+
+      testWidgets('appears on a device that can', (tester) async {
+        await _pumpHome(tester, scannerAvailable: true);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Scan document'), findsOneWidget);
+        expect(find.text('Capture'), findsOneWidget);
+      });
+
+      testWidgets('is reachable by the words people search for',
+          (tester) async {
+        await _pumpHome(tester, scannerAvailable: true);
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byType(TextField), 'receipt');
+        await tester.pumpAndSettle();
+        expect(find.text('Scan document'), findsOneWidget);
+      });
+
+      testWidgets('stays out of search on a device that cannot scan',
+          (tester) async {
+        await _pumpHome(tester);
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byType(TextField), 'receipt');
+        await tester.pumpAndSettle();
+        expect(find.text('Scan document'), findsNothing);
+        expect(find.textContaining('No tool matches'), findsOneWidget);
+      });
+
+      testWidgets('opens the camera rather than a screen', (tester) async {
+        await _pumpHome(tester, scannerAvailable: true);
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Scan document'));
+        await tester.pumpAndSettle();
+
+        // Cancelled by default, so nothing is pushed and the user stays put.
+        expect(scanner.calls, hasLength(1));
+        expect(find.byType(HomePage), findsOneWidget);
+        expect(find.byType(ToolPlaceholderPage), findsNothing);
+      });
+
+      testWidgets('a capture goes straight to the review screen',
+          (tester) async {
+        await _pumpHome(tester, scannerAvailable: true);
+        await tester.pumpAndSettle();
+        scanner.result =
+            FakeDocumentScanner.captured(['page-0.jpg', 'page-1.jpg']);
+
+        await tester.tap(find.text('Scan document'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(ImagesToPdfPage), findsOneWidget);
+        expect(find.text('Scan document'), findsOneWidget); // the app bar
+        expect(find.text('Create 2 pages'), findsOneWidget);
       });
     });
 

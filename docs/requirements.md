@@ -41,6 +41,7 @@ Gaps found when auditing v2 against its own change log, plus the items the revie
 | 24 | **Save to device built, and the reason for it written down** (§6.1) | §6 always listed "a user-chosen location via the system picker" and it was never built, leaving the share sheet as the only way out of the sandbox. That matters more than a missing menu item: app-private storage is deleted on uninstall, so the library silently doubled as a place to lose work. |
 | 25 | **Print built on the platform print systems, not a package** (§6.2) | The last of §6's actions. `printing` would have added a dependency whose layout callback takes the whole document as bytes — the same §13 breach as `file_picker.saveFile()`. Android's PrintDocumentAdapter and iOS's UIPrintInteractionController both take a descriptor or a URL, so neither needs the bytes. |
 | 26 | **Free tier put behind a single switch, currently off** (§9) | Every limit ran through `entitlements.isPremium`, so the app could enforce a tier it had nothing to sell for. One flag now gates enforcement, advertising and counting together, via one `isUnrestricted` predicate — a tool that still capped its input while the wall was down would be exactly the drift the limits table exists to prevent. |
+| 27 | **Document scanner built and moved into v1.0** (§3.10) | It was cut from v1.0 on an effort estimate that assumed building a capture UI. VisionKit and ML Kit supply edge detection, perspective correction, retake and reorder, so the work was a platform channel and a page cap. Availability is a first-class question rather than an error path, because on Android the scanner is genuinely absent without Play services. |
 
 ---
 
@@ -229,13 +230,25 @@ All pages or a selection · JPG or PNG · resolution by DPI (72 / 150 / 300 / cu
 
 Acceptance: 50 pages export at 150 DPI in under 30s; the size estimate shown before export is within ±25% of the actual total; cancelling at any point leaves no orphaned files.
 
-### 3.10 Document scanner (v1.1)
+### 3.10 Document scanner (built, shipped in v1.0)
 
 Automatic edge detection, perspective correction, manual crop handles, enhancement (Original / Color / Grayscale / Black & white), multi-page capture, reorder and retake before export, PDF or image output.
 
 Implementation note and constraint: this uses the platform scanners — VisionKit on iOS, ML Kit Document Scanner on Android. The Android component **requires Google Play services and downloads its module on first use**, so the first scan on a fresh Android install needs a network connection, and the feature is unavailable on non-GMS devices. Required behaviour: detect availability up front, hide or disable the tool with an explanation rather than failing at capture time, and state the exception in §7 and in the store listing if scanning is promoted as offline.
 
 Acceptance: edge detection locks onto an A4 sheet on a contrasting surface within 2s in normal indoor light; a 10-page scan exports to PDF in under 10s; the availability check completes within 300ms of home-screen load so the tool never appears and then disappears.
+
+**As built.** Brought forward into v1.0: the platform scanners do the hard part, so this cost far less than the roadmap assumed.
+
+1. **Availability decides whether the tool exists.** `DocumentScanner.isAvailable()` is asked as the home screen loads, and the card starts hidden and appears — never the reverse. On Android the answer is whether Google Play services are present; on iOS, `VNDocumentCameraViewController.isSupported`. When unavailable the card, its "Capture" group heading, and its search results are all absent, so there is nothing to fail at capture time.
+2. **A scan becomes ordinary images the moment it comes back.** Captured pages flow into the Images → PDF screen — reorder, rotate, drop a page, page layout, save — rather than a second pipeline. `ImageSource` carries the only real differences: the wording, and that the library records "Scanned N pages" under `toolId: 'scan'`.
+3. **The platform chooses where pages land**, in its own cache directory, wiped at the start of every capture, and returns absolute paths and byte sizes. Deliberately not a directory this side picks: resolving one means file I/O on the path between a tap and the camera, which cannot complete inside a widget test's fake-async zone — a mistake made and caught during this work.
+4. **The free-tier page cap is applied after capture**, not handed to the scanner, because the platform scanners do not all honour a page limit and the number on the card has to be the number that holds.
+5. **Backing out of the camera is reported as nothing at all**, per §6.1.5. Only "not available on this device", "could not be opened" and "returned no pages" are said.
+
+Gallery import is switched off in the Android scanner: it would duplicate Images → PDF while skipping its page-layout options.
+
+Not built here: choosing image-vs-PDF output (always PDF, via the shared pipeline) and any scanner UI of our own — enhancement filters, crop handles, retake and reorder are the platform's, which is the point of using it.
 
 ### 3.11 Annotation (v1.2)
 
@@ -337,7 +350,7 @@ Every v1.0 feature works fully offline with no network permission needed at runt
 
 Documented exceptions, which must be surfaced in the UI rather than discovered by the user:
 
-1. **Android document scanner (v1.1)** — first use downloads the ML Kit module (§3.10).
+1. **Android document scanner** — first use downloads the ML Kit module (§3.10). The app checks availability before offering the tool, so this surfaces as the tool being absent rather than as a failure mid-capture.
 2. **Purchase and restore** — store transactions need connectivity. Entitlements are cached locally and honoured offline for a grace period (default 14 days) so a paying user is never locked out on a plane.
 3. **Ads** (free tier) — served when online; their absence must never block a tool.
 

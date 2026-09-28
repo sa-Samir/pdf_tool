@@ -201,7 +201,10 @@ void main() {
         try {
           final temp = workspace.file('bad.pdf');
           await FakePdfEngine.writeFake(temp, 99);
-          return services.store
+          // Awaited, not just returned: the finally below disposes the
+          // workspace, and without the await it would race _verify reading
+          // the very file it is verifying.
+          return await services.store
               .replace(temp, target: source.file, expectedPages: 2);
         } finally {
           await workspace.dispose();

@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import VisionKit
 
 /// Copies finished documents out to the Files app (requirements.md 6).
 ///
@@ -136,5 +137,132 @@ final class DocumentPrintHandler: NSObject {
     // Reported once the system UI has the document. Whether the user prints
     // it, saves it as a PDF or backs out is between them and that UI.
     result(["status": "started"])
+  }
+}
+
+/// Document scanning through VisionKit (requirements.md 3.10).
+///
+/// Unlike Android's, this scanner is part of the OS: no module download, no
+/// Play services, so `isAvailable` is a straight capability check.
+final class DocumentScanHandler: NSObject, VNDocumentCameraViewControllerDelegate {
+
+  private var pending: FlutterResult?
+  private weak var presenter: UIViewController?
+
+  init(presenter: UIViewController) {
+    self.presenter = presenter
+  }
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "isAvailable":
+      result(VNDocumentCameraViewController.isSupported)
+    case "scan":
+      startScan(result: result)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func startScan(result: @escaping FlutterResult) {
+    guard VNDocumentCameraViewController.isSupported else {
+      result(Self.reply(status: "unavailable"))
+      return
+    }
+    guard pending == nil else {
+      result(FlutterError(
+        code: "busy",
+        message: "A scan is already in progress.",
+        details: nil))
+      return
+    }
+    guard let presenter = presenter else {
+      result(Self.reply(status: "failed"))
+      return
+    }
+
+    pending = result
+    let controller = VNDocumentCameraViewController()
+    controller.delegate = self
+    presenter.present(controller, animated: true)
+  }
+
+  func documentCameraViewController(
+    _ controller: VNDocumentCameraViewController,
+    didFinishWith scan: VNDocumentCameraScan
+  ) {
+    controller.dismiss(animated: true)
+
+    // Pages are read on the main thread, where the scan object lives, then
+    // encoded and written off it: several full-page JPEGs would otherwise
+    // stutter the return to the app.
+    var images: [UIImage] = []
+    for index in 0..<scan.pageCount {
+      images.append(scan.imageOfPage(at: index))
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let pages = Self.write(images)
+      DispatchQueue.main.async {
+        self.settle(Self.reply(
+          status: pages.isEmpty ? "failed" : "captured",
+          pages: pages))
+      }
+    }
+  }
+
+  func documentCameraViewControllerDidCancel(
+    _ controller: VNDocumentCameraViewController
+  ) {
+    controller.dismiss(animated: true)
+    // Backing out of the camera is a choice, not a failure.
+    settle(Self.reply(status: "cancelled"))
+  }
+
+  func documentCameraViewController(
+    _ controller: VNDocumentCameraViewController,
+    didFailWithError error: Error
+  ) {
+    controller.dismiss(animated: true)
+    settle(Self.reply(status: "failed"))
+  }
+
+  /// Writes the captured pages somewhere this app owns.
+  ///
+  /// The directory is wiped at the start of every capture: a scan is read
+  /// once, normalised into an operation's workspace, and never needed again.
+  private static func write(_ images: [UIImage]) -> [[String: Any]] {
+    let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("scans", isDirectory: true)
+    try? FileManager.default.removeItem(at: directory)
+    try? FileManager.default.createDirectory(
+      at: directory, withIntermediateDirectories: true)
+
+    var pages: [[String: Any]] = []
+    for (index, image) in images.enumerated() {
+      guard let data = image.jpegData(compressionQuality: 0.9) else { continue }
+      let url = directory.appendingPathComponent(
+        String(format: "page-%03d.jpg", index + 1))
+      do {
+        try data.write(to: url)
+        // Reported here so the review screen never has to stat the file.
+        pages.append(["path": url.path, "bytes": data.count])
+      } catch {
+        continue
+      }
+    }
+    return pages
+  }
+
+  private func settle(_ outcome: [String: Any]) {
+    pending?(outcome)
+    pending = nil
+  }
+
+  private static func reply(
+    status: String,
+    pages: [[String: Any]] = []
+  ) -> [String: Any] {
+    ["status": status, "pages": pages]
   }
 }

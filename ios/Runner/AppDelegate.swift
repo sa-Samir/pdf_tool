@@ -7,6 +7,7 @@ import UIKit
   /// the call that presents it.
   private var deviceExport: DeviceExportHandler?
   private var documentPrint: DocumentPrintHandler?
+  private var documentScan: DocumentScanHandler?
 
   override func application(
     _ application: UIApplication,
@@ -32,6 +33,15 @@ import UIKit
         binaryMessenger: controller.binaryMessenger
       ).setMethodCallHandler { call, result in
         printer.handle(call, result: result)
+      }
+
+      let scanner = DocumentScanHandler(presenter: controller)
+      documentScan = scanner
+      FlutterMethodChannel(
+        name: "com.samir.pdf_toolbox/scan",
+        binaryMessenger: controller.binaryMessenger
+      ).setMethodCallHandler { call, result in
+        scanner.handle(call, result: result)
       }
     }
 

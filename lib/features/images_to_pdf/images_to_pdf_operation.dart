@@ -23,7 +23,58 @@ class PickedImage {
       PickedImage(document: document, quarterTurns: (quarterTurns + turns) % 4);
 }
 
-/// Builds a PDF from images (requirements.md 3.8).
+/// Where a set of images came from.
+///
+/// The only thing that differs between picking photos and scanning paper is
+/// what the result is called and how the library records it. Everything after
+/// that -- normalise, lay out, build, verify, commit -- is one pipeline, so
+/// the difference is data rather than a second copy of the code.
+enum ImageSource {
+  picked(
+    title: 'Images to PDF',
+    toolId: 'images_to_pdf',
+    stem: 'Images',
+    emptyHeadline: 'Turn photos into a PDF',
+    emptyHint: 'One image per page. You can reorder and rotate them first.',
+    addLabel: 'Choose images',
+  ),
+  scanned(
+    title: 'Scan document',
+    toolId: 'scan',
+    stem: 'Scan',
+    emptyHeadline: 'Scan paper with the camera',
+    emptyHint: 'Edges are found and straightened for you. '
+        'Capture as many pages as you need.',
+    addLabel: 'Open the scanner',
+  );
+
+  const ImageSource({
+    required this.title,
+    required this.toolId,
+    required this.stem,
+    required this.emptyHeadline,
+    required this.emptyHint,
+    required this.addLabel,
+  });
+
+  final String title;
+  final String toolId;
+
+  /// Default file-name stem for the result.
+  final String stem;
+
+  final String emptyHeadline;
+  final String emptyHint;
+  final String addLabel;
+
+  /// How the library describes the result.
+  String describe(int count) => switch (this) {
+        ImageSource.picked => 'From $count image${count == 1 ? '' : 's'}',
+        ImageSource.scanned => 'Scanned $count page${count == 1 ? '' : 's'}',
+      };
+}
+
+/// Builds a PDF from images (requirements.md 3.8, and 3.10 for scans).
 ///
 /// Images are normalised one at a time, so 50 photos never become 50 bitmaps
 /// in memory.
@@ -32,6 +83,7 @@ Future<File> imagesToPdfDocument({
   required List<PickedImage> images,
   required ImagePageOptions options,
   required JobHandle handle,
+  ImageSource source = ImageSource.picked,
 }) async {
   final workspace = await services.store.openWorkspace();
   try {
@@ -74,9 +126,11 @@ Future<File> imagesToPdfDocument({
     );
     handle.cancel.throwIfCancelled();
 
-    final stem = images.length == 1
+    // A single picked photo keeps its own name; a scan is always "Scan",
+    // because the platform scanner's page file names mean nothing to anyone.
+    final stem = source == ImageSource.picked && images.length == 1
         ? p.basenameWithoutExtension(images.first.name)
-        : 'Images';
+        : source.stem;
     final saved = await services.store.commit(
       temp,
       desiredName: '$stem.pdf',
@@ -84,9 +138,8 @@ Future<File> imagesToPdfDocument({
     );
     await services.library.record(
       file: saved,
-      operation: 'From ${images.length} image'
-          '${images.length == 1 ? '' : 's'}',
-      toolId: 'images_to_pdf',
+      operation: source.describe(images.length),
+      toolId: source.toolId,
       pageCount: images.length,
     );
     handle.report(completed: total, total: total, label: 'Done');

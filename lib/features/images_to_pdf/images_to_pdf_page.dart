@@ -11,12 +11,27 @@ import '../../core/jobs/job_controller.dart';
 import '../../core/services/app_services.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/job_views.dart';
+import '../scan/scan_flow.dart';
 import '../shared/result_page.dart';
 import 'images_to_pdf_operation.dart';
 
-/// Images to PDF (requirements.md 3.8).
+/// Turns a list of images into a PDF (requirements.md 3.8).
+///
+/// Also the review step for a scan (requirements.md 3.10): capture, reorder,
+/// rotate, drop a bad page and save are the same job whether the images came
+/// from the photo library or the camera, so [source] changes the wording and
+/// the library record rather than the screen.
 class ImagesToPdfPage extends StatefulWidget {
-  const ImagesToPdfPage({super.key});
+  const ImagesToPdfPage({
+    super.key,
+    this.source = ImageSource.picked,
+    this.initial = const <PickedImage>[],
+  });
+
+  final ImageSource source;
+
+  /// Pages already captured, for a scan that opened the camera first.
+  final List<PickedImage> initial;
 
   @override
   State<ImagesToPdfPage> createState() => _ImagesToPdfPageState();
@@ -32,6 +47,7 @@ class _ImagesToPdfPageState extends State<ImagesToPdfPage> {
   void initState() {
     super.initState();
     _job.addListener(_onJobChanged);
+    _images.addAll(widget.initial);
   }
 
   @override
@@ -50,7 +66,7 @@ class _ImagesToPdfPageState extends State<ImagesToPdfPage> {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(
           builder: (_) => ResultPage(
-            title: 'Images to PDF',
+            title: widget.source.title,
             files: [output],
             summary: '${_images.length} image'
                 '${_images.length == 1 ? '' : 's'} → '
@@ -65,6 +81,10 @@ class _ImagesToPdfPageState extends State<ImagesToPdfPage> {
   Future<void> _add() async {
     setState(() => _importFailure = null);
     final services = AppServicesScope.of(context);
+    if (widget.source == ImageSource.scanned) {
+      await _addByScanning(services);
+      return;
+    }
     try {
       final picked = await services.importer.pickImages();
       if (!mounted || picked.isEmpty) return;
@@ -92,6 +112,34 @@ class _ImagesToPdfPageState extends State<ImagesToPdfPage> {
     }
   }
 
+  /// Captures more pages with the camera.
+  Future<void> _addByScanning(AppServices services) async {
+    final result = await services.scanner.scan();
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final message = describeScan(result);
+    if (message != null) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+    }
+    if (!result.hasPages) return;
+
+    final capped = capScan(
+      services,
+      captured: pickedFromScan(result),
+      existing: _images.length,
+    );
+    if (capped.capped) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(scanCappedMessage)));
+    }
+    if (capped.accepted.isEmpty) return;
+    setState(() => _images.addAll(capped.accepted));
+  }
+
   void _run() {
     final services = AppServicesScope.of(context);
     final images = List.of(_images);
@@ -101,6 +149,7 @@ class _ImagesToPdfPageState extends State<ImagesToPdfPage> {
           images: images,
           options: options,
           handle: handle,
+          source: widget.source,
         ));
   }
 
@@ -109,7 +158,7 @@ class _ImagesToPdfPageState extends State<ImagesToPdfPage> {
     final running = _job.isRunning;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Images to PDF')),
+      appBar: AppBar(title: Text(widget.source.title)),
       body: SafeArea(
         child: Column(
           children: [
@@ -136,7 +185,7 @@ class _ImagesToPdfPageState extends State<ImagesToPdfPage> {
               ),
             Expanded(
               child: _images.isEmpty
-                  ? _EmptyState(onChoose: _add)
+                  ? _EmptyState(source: widget.source, onChoose: _add)
                   : _body(running),
             ),
             if (_images.isNotEmpty)
@@ -148,7 +197,9 @@ class _ImagesToPdfPageState extends State<ImagesToPdfPage> {
                       child: OutlinedButton.icon(
                         onPressed: running ? null : _add,
                         icon: const Icon(Icons.add),
-                        label: const Text('Add more'),
+                        label: Text(widget.source == ImageSource.scanned
+                            ? 'Scan more'
+                            : 'Add more'),
                       ),
                     ),
                     const SizedBox(width: Insets.md),
@@ -351,8 +402,9 @@ class _Choice<T> extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onChoose});
+  const _EmptyState({required this.source, required this.onChoose});
 
+  final ImageSource source;
   final VoidCallback onChoose;
 
   @override
@@ -367,11 +419,10 @@ class _EmptyState extends StatelessWidget {
             Icon(Icons.image_outlined,
                 size: 40, color: theme.colorScheme.primary),
             const SizedBox(height: Insets.lg),
-            Text('Turn photos into a PDF',
-                style: theme.textTheme.titleMedium),
+            Text(source.emptyHeadline, style: theme.textTheme.titleMedium),
             const SizedBox(height: Insets.xs),
             Text(
-              'One image per page. You can reorder and rotate them first.',
+              source.emptyHint,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -380,8 +431,10 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: Insets.xl),
             FilledButton.icon(
               onPressed: onChoose,
-              icon: const Icon(Icons.photo_library_outlined),
-              label: const Text('Choose images'),
+              icon: Icon(source == ImageSource.scanned
+                  ? Icons.document_scanner_outlined
+                  : Icons.photo_library_outlined),
+              label: Text(source.addLabel),
             ),
           ],
         ),

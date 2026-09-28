@@ -15,6 +15,7 @@ import '../viewer/viewer_page.dart';
 import '../pages/page_grid_page.dart';
 import '../settings/settings_page.dart';
 import '../split/split_page.dart';
+import '../scan/scan_flow.dart';
 import '../tool/tool_placeholder_page.dart';
 import 'widgets/recents_section.dart';
 import 'widgets/tool_grid.dart';
@@ -41,10 +42,25 @@ class _HomePageState extends State<HomePage> {
     super.didChangeDependencies();
     _recents ??= _loadRecents();
     _loadAllowances();
+    _checkScanner();
   }
 
   Future<List<LibraryDocument>> _loadRecents() =>
       AppServicesScope.of(context).library.list(limit: 10);
+
+  /// Whether the device can scan at all. Null until the check answers.
+  ///
+  /// Starts hidden and appears, never the reverse: requirements.md 3.10 asks
+  /// that the tool never appear and then disappear, and the Android scanner is
+  /// simply absent without Google Play services.
+  bool? _scannerAvailable;
+
+  Future<void> _checkScanner() async {
+    if (_scannerAvailable != null) return;
+    final available =
+        await AppServicesScope.of(context).scanner.isAvailable();
+    if (mounted) setState(() => _scannerAvailable = available);
+  }
 
   /// Reads how many free runs each premium tool has left, so a card never
   /// shows a number the app will not honour.
@@ -90,7 +106,30 @@ class _HomePageState extends State<HomePage> {
         _ => ToolPlaceholderPage(tool: tool),
       };
 
+  /// Drops tools this device cannot run, and any group left empty by that.
+  Map<ToolGroup, List<PdfTool>> _withoutUnavailable(
+    Map<ToolGroup, List<PdfTool>> groups,
+  ) {
+    if (_scannerAvailable ?? false) return groups;
+    final kept = <ToolGroup, List<PdfTool>>{};
+    for (final entry in groups.entries) {
+      final tools = entry.value.where((t) => t.id != 'scan').toList();
+      if (tools.isNotEmpty) kept[entry.key] = tools;
+    }
+    return kept;
+  }
+
   Future<void> _openTool(PdfTool tool) async {
+    // Scanning is an action, not a screen: the camera opens first and the
+    // review screen is pushed only if pages came back.
+    if (tool.id == 'scan') {
+      await startScan(context);
+      if (mounted) {
+        _refreshRecents();
+        _loadAllowances();
+      }
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => _screenFor(tool)),
     );
@@ -150,7 +189,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final groups = ToolCatalog.grouped(query: _query);
+    final groups = _withoutUnavailable(ToolCatalog.grouped(query: _query));
     final isSearching = _query.trim().isNotEmpty;
 
     return Scaffold(

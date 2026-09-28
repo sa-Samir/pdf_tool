@@ -136,7 +136,10 @@ abstract final class ToolCatalog {
       description: 'Capture paper with the camera',
       icon: Icons.document_scanner_outlined,
       group: ToolGroup.capture,
-      release: Release.v1_1,
+      // Shipped early, in v1.0: the platform scanners do the hard part, so
+      // this cost far less than the roadmap assumed. Availability is still a
+      // runtime question -- see HomePage (requirements.md 3.10).
+      release: Release.v1_0,
       tier: ToolTier.freeWithLimit,
       tierNote: 'Up to 3 pages',
       aliases: ['camera', 'photo', 'paper', 'receipt', 'scanner'],

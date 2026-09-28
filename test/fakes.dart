@@ -19,6 +19,7 @@ import 'package:pdf_toolbox/core/jobs/cancel_token.dart';
 import 'package:pdf_toolbox/core/library/library_document.dart';
 import 'package:pdf_toolbox/core/library/library_repository.dart';
 import 'package:pdf_toolbox/core/pages/page_edit_session.dart';
+import 'package:pdf_toolbox/core/scan/document_scanner.dart';
 
 /// Runs the enclosing tests with the free tier switched on.
 ///
@@ -848,6 +849,42 @@ class FakeDocumentPrinter implements DocumentPrinter {
   }) async {
     jobs.add((path: file.path, jobName: jobName, pageCount: pageCount));
     return outcome;
+  }
+}
+
+/// Document scanner for tests: answers however a test needs, records calls.
+class FakeDocumentScanner implements DocumentScanner {
+  FakeDocumentScanner({this.available = true, ScanResult? result})
+      : result = result ?? const ScanResult.cancelled();
+
+  bool available;
+
+  /// What [scan] returns.
+  ScanResult result;
+
+  var availabilityChecks = 0;
+  final calls = <int?>[];
+
+  /// Builds a captured result over [names], with no file I/O at all.
+  static ScanResult captured(List<String> names, {int bytesEach = 120000}) =>
+      ScanResult(
+        ScanOutcome.captured,
+        pages: [
+          for (final name in names)
+            ScannedPage(file: File('/memory/$name'), sizeBytes: bytesEach),
+        ],
+      );
+
+  @override
+  Future<bool> isAvailable() async {
+    availabilityChecks++;
+    return available;
+  }
+
+  @override
+  Future<ScanResult> scan({int? pageLimit}) async {
+    calls.add(pageLimit);
+    return result;
   }
 }
 

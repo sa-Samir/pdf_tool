@@ -40,6 +40,15 @@ android {
     }
 }
 
+dependencies {
+    // ML Kit Document Scanner (requirements.md 3.10). Delivered through Google
+    // Play services: the module is downloaded on first use, which is why the
+    // app checks availability before offering the tool at all and why scanning
+    // is a documented exception to "works fully offline" (requirements.md 7).
+    // Still a beta artifact upstream; pinned rather than ranged.
+    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1")
+}
+
 flutter {
     source = "../.."
 }
